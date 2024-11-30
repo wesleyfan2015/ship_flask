@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ship Grid Upload</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h1 {
+            text-align: center;
+        }
+
+        table {
+            width: 50%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+
+        table, th, td {
+            border: 1px solid #000;
+        }
+
+        th, td {
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+        }
+
+        th {
+            background-color: #e0e0e0;
+        }
+
+        td {
+            min-width: 40px;
+            height: 25px;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        /* State-specific styling */
+        .unused {
+            background-color: white;
+            color: #000;
+        }
+
+        .nan {
+            background-color: black;
+            color: #000;
+        }
+
+        .container {
+            background-color: white;
+            color: red;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        td:hover {
+            opacity: 0.8;
+        }
+
+        {#    让left和right平行排版#}
+        #leftSection {
+            float: left;
+            width: 50%;
+        }
+
+        #rightSection {
+            float: right;
+            width: 50%;
+        }
+
+        #balanceSection {
+            margin: 20px 0;
+        }
+
+        #balanceForm {
+            text-align: center;
+        }
+
+        #unloadSection {
+            margin: 20px 0;
+        }
+
+        #loadSection {
+            width: 100%;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f4f4f4;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #loadForm {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        button {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        #unloadSection {
+            margin: 20px 0;
+            padding: 20px;
+            background-color: #f9f9f9;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        #unloadForm {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        button {
+            padding: 10px;
+            font-size: 16px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #f44336; /* Red color for unload action */
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #e53935;
+        }
+    </style>
+</head>
+<body>
+<section id="leftSection">
+    <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+        <label for="file">Choose a manifest file:</label>
+        <input type="file" name="file" id="file" accept=".txt" required>
+        <button type="submit">Upload</button>
+    </form>
+
+    <h2>Ship Grid:</h2>
+    <table id="shipGrid">
+        <tbody id="gridBody">
+        {% for row in grid[::-1] %} <!-- Reverse the grid data here to display rows in reverse order -->
+            <tr>
+                {#                <td>{{ '{:02}'.format(loop.index) }}</td>#}
+                <!-- Display rows in normal order, since the grid is reversed -->
+
+                {% for col in range(cols) %}
+                    <td class="
+                        {% if row[col].container %}
+                            container
+                        {% elif row[col].available %}
+                            unused
+                        {% else %}
+                            nan
+                        {% endif %}
+                    "
+                            {#                        onclick="handleCellClick({{ loop.index0 }}, {{ col }})"#}
+                    >
+                        <!-- Use normal loop.index0 for zero-based index -->
+                        {% if row[col].container %}
+                            {{ row[col].container.name }} ({{ row[col].container.weight }})
+                        {% endif %}
+                    </td>
+                {% endfor %}
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+
+</section>
+
+<section id="rightSection">
+    <section id="balanceSection">
+        <form id="balanceForm" action="/balance" method="POST">
+            <label for="balance">Click this button to balance:</label>
+            <button type="submit">Balance</button>
+        </form>
+    </section>
+    <section id="loadSection">
+        <form id="loadForm" action="/load" method="POST">
+            <div class="form-group">
+                <label for="load">Name to load:</label>
+                <input type="text" name="load" id="load" placeholder="Enter container name" required>
+            </div>
+
+            <div class="form-group">
+                <label for="row">Row:</label>
+                <input type="number" name="row" id="row" placeholder="Enter row number" required min="1">
+            </div>
+
+            <div class="form-group">
+                <label for="col">Col:</label>
+                <input type="number" name="col" id="col" placeholder="Enter column number" required min="1">
+            </div>
+
+            <div class="form-group">
+                <label for="weight">Weight:</label>
+                <input type="number" name="weight" id="weight" placeholder="Enter container weight" required min="1">
+            </div>
+
+            <div class="form-group">
+                <label for="balance">Click this button to load:</label>
+                <button type="submit">Load</button>
+            </div>
+        </form>
+    </section>
+
+    <section id="unloadSection">
+    <h2>Unload Container:</h2>
+    <form id="unloadForm" action="/unload" method="POST">
+        <div class="form-group">
+            <label for="container_name">Container Name:</label>
+            <input type="text" name="container_name" id="container_name" placeholder="Enter container name" required>
+        </div>
+
+        <div class="form-group">
+            <button type="submit">Unload</button>
+        </div>
+    </form>
+</section>
+
+</section>
+
+<script>
+    // JavaScript function to handle cell click and display row and col in correct format
+    function handleCellClick(row, col) {
+        alert(`Row: ${row < 10 ? '0' + row : row}, Col: ${col < 10 ? '0' + (col + 1) : (col + 1)}`);
+    }
+</script>
+</body>
+</html>
