@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ship Management System</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f4f4f4;
+        }
+
+        h1, h2, h3 {
+            text-align: center;
+        }
+
+        .container-section {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 20px;
+        }
+
+        .section {
+            flex: 1;
+            min-width: 300px;
+            padding: 20px;
+            background-color: #ffffff;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+
+        table, th, td {
+            border: 1px solid #000;
+        }
+
+        th, td {
+            padding: 10px;
+            text-align: center;
+            font-size: 12px;
+        }
+
+        th {
+            background-color: #e0e0e0;
+        }
+
+        td.unused {
+            background-color: #ffffff;
+            color: #000000;
+        }
+
+        td.nan {
+            background-color: #000000;
+            color: #ffffff;
+        }
+
+        td.container {
+            background-color: #ffdddd;
+            color: #000000;
+            font-weight: bold;
+        }
+
+        form {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        button {
+            padding: 8px;
+            font-size: 14px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+
+        button {
+            background-color: #4CAF50;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        /* Specific button styles */
+        button.unload-button {
+            background-color: #f44336; /* Red color for unload action */
+        }
+
+        button.unload-button:hover {
+            background-color: #e53935;
+        }
+
+        /* Grid Titles */
+        .grid-title {
+            text-align: center;
+            margin-bottom: 10px;
+            font-weight: bold;
+        }
+
+        /* Message Styling */
+        .message {
+            text-align: center;
+            margin-top: 10px;
+            font-weight: bold;
+            color: #333333;
+        }
+
+        #ship_grid {
+            td {
+                padding: 15px;
+                text-align: center;
+                font-size: 14px;
+                min-width: 40px;
+                height: 25px;
+                vertical-align: middle;
+                cursor: pointer;
+            }
+            width: 50%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>Ship Management System</h1>
+
+    <div class="container-section">
+        <!-- Left Section: Upload and Ship Grid -->
+        <div class="section">
+            <h2>Upload Manifest File</h2>
+            <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
+                <input type="file" name="file" accept=".txt" required>
+                <button type="submit">Upload</button>
+            </form>
+
+            <h2>Ship Grid:</h2>
+            <table id = "ship_grid">
+{#                <thead>#}
+{#                    <tr>#}
+{#                        {% for col in range(cols) %}#}
+{#                            <th>{{ col + 1 }}</th>#}
+{#                        {% endfor %}#}
+{#                    </tr>#}
+{#                </thead>#}
+                <tbody>
+                    {% for row in grid[::-1] %} <!-- Reverse the grid data to display rows from bottom to top -->
+                        <tr>
+                            {% for col in range(cols) %}
+                                <td class="
+                                    {% if row[col].container %}
+                                        container
+                                    {% elif row[col].available %}
+                                        unused
+                                    {% else %}
+                                        nan
+                                    {% endif %}
+                                ">
+                                    {% if row[col].container %}
+                                        {{ row[col].container.name }} ({{ row[col].container.weight }})
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Right Section: Buffer Grid and Operations -->
+        <div class="section">
+            <h2>Buffer Grid:</h2>
+            <table>
+                <thead>
+                    <tr>
+                        {% for col in range(buffer_cols) %}
+                            <th>{{ col + 1 }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in buffer.grid %}
+                        <tr>
+                            {% for slot in row %}
+                                <td class="
+                                    {% if slot.container %}
+                                        container
+                                    {% elif slot.available %}
+                                        unused
+                                    {% else %}
+                                        nan
+                                    {% endif %}
+                                ">
+                                    {% if slot.container %}
+                                        {{ slot.container.name }} ({{ slot.container.weight }})
+                                    {% endif %}
+                                </td>
+                            {% endfor %}
+                        </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <h2>Buffer Operations:</h2>
+            <form id="moveToBufferForm" action="/move_to_buffer" method="POST">
+                <h3>Move to Buffer:</h3>
+                <div class="form-group">
+                    <label for="ship_x">Ship Row:</label>
+                    <input type="number" name="ship_x" id="ship_x" placeholder="Enter ship row" required min="1" max="{{ rows }}">
+                </div>
+                <div class="form-group">
+                    <label for="ship_y">Ship Column:</label>
+                    <input type="number" name="ship_y" id="ship_y" placeholder="Enter ship column" required min="1" max="{{ cols }}">
+                </div>
+                <button type="submit">Move to Buffer</button>
+            </form>
+
+            <form id="moveFromBufferForm" action="/move_from_buffer" method="POST">
+                <h3>Move from Buffer:</h3>
+                <div class="form-group">
+                    <label for="buffer_x">Buffer Row:</label>
+                    <input type="number" name="buffer_x" id="buffer_x" placeholder="Enter buffer row" required min="1" max="{{ buffer_rows }}">
+                </div>
+                <div class="form-group">
+                    <label for="buffer_y">Buffer Column:</label>
+                    <input type="number" name="buffer_y" id="buffer_y" placeholder="Enter buffer column" required min="1" max="{{ buffer_cols }}">
+                </div>
+                <button type="submit">Move from Buffer</button>
+            </form>
+
+            <form id="moveWithinBufferForm" action="/move_within_buffer" method="POST">
+                <h3>Move Within Buffer:</h3>
+                <div class="form-group">
+                    <label for="from_x">From Row:</label>
+                    <input type="number" name="from_x" id="from_x" placeholder="Enter source row" required min="1" max="{{ buffer_rows }}">
+                </div>
+                <div class="form-group">
+                    <label for="from_y">From Column:</label>
+                    <input type="number" name="from_y" id="from_y" placeholder="Enter source column" required min="1" max="{{ buffer_cols }}">
+                </div>
+                <div class="form-group">
+                    <label for="to_x">To Row:</label>
+                    <input type="number" name="to_x" id="to_x" placeholder="Enter target row" required min="1" max="{{ buffer_rows }}">
+                </div>
+                <div class="form-group">
+                    <label for="to_y">To Column:</label>
+                    <input type="number" name="to_y" id="to_y" placeholder="Enter target column" required min="1" max="{{ buffer_cols }}">
+                </div>
+                <button type="submit">Move Within Buffer</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="container-section">
+        <!-- Bottom Section: Operations -->
+        <div class="section">
+            <h2>Ship Operations</h2>
+
+            <form id="balanceForm" action="/balance" method="POST">
+                <button type="submit">Balance Ship</button>
+            </form>
+
+            <form id="loadForm" action="/load" method="POST">
+                <h3>Load Container:</h3>
+                <div class="form-group">
+                    <label for="load">Container Name:</label>
+                    <input type="text" name="load" id="load" placeholder="Enter container name" required>
+                </div>
+                <div class="form-group">
+                    <label for="row">Row:</label>
+                    <input type="number" name="row" id="row" placeholder="Enter row number" required min="1" max="{{ rows }}">
+                </div>
+                <div class="form-group">
+                    <label for="col">Column:</label>
+                    <input type="number" name="col" id="col" placeholder="Enter column number" required min="1" max="{{ cols }}">
+                </div>
+                <div class="form-group">
+                    <label for="weight">Weight:</label>
+                    <input type="number" name="weight" id="weight" placeholder="Enter container weight" required min="1">
+                </div>
+                <button type="submit">Load</button>
+            </form>
+
+            <form id="unloadForm" action="/unload" method="POST">
+                <h3>Unload Container:</h3>
+                <div class="form-group">
+                    <label for="container_name">Container Name:</label>
+                    <input type="text" name="container_name" id="container_name" placeholder="Enter container name" required>
+                </div>
+                <button type="submit" class="unload-button">Unload</button>
+            </form>
+
+            <form id="departForm" action="/depart" method="POST">
+                <h3>Departure:</h3>
+                <button type="submit">Depart Ship</button>
+            </form>
+
+            {% if message %}
+                <div class="message">{{ message }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        // Optional: Add JavaScript for enhanced interactivity if needed
+    </script>
+</body>
+</html>
