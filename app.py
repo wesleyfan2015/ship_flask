@@ -25,7 +25,12 @@ def allowed_file(filename):
     """Check if the file has the correct extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ACCEPT_EXTENSION']
 
+# web page submission file
 @app.route('/')
+def submission():
+    return render_template('submission.html')
+
+@app.route('/ship_problem')
 def index():
     # init the grid table
     ship_grid = create_ship_grid(rows, cols)
