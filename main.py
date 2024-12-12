@@ -220,6 +220,22 @@ def calculate_crane_time(from_pos, to_pos, ship_grid):
     total_time = crane_to_container_time + move_container_time + crane_return_time
     return crane_to_container_time, move_container_time, crane_return_time, total_time
 
+def calculate_crane_move_time(crane_pos, from_pos, to_pos, ship_grid, buffer, transfer):
+    x1, y1 = crane_pos
+    x2, y2 = from_pos 
+    x3, y3 = to_pos
+
+    crane_to_container_time = abs(x1 - x2) + abs(y1 - y2)
+    move_container_time = abs(x2 - x3) + abs(y2 - y3)
+
+    if buffer:
+        move_container_time += 4
+    
+    if transfer += 2
+
+    crane_return_time = 
+
+
 def balance_ship(ship_grid, log_file=None):
     """
     Balance the ship to satisfy both weight and moment conditions, while tracking crane time.
@@ -417,3 +433,10 @@ if __name__ == "__main__":
             if input("Do you want to perform another operation? (y/n): ").lower() != "y":
                 print("Exiting the program.")
                 break
+
+def can_move_up(ship_grid, x, y):
+    for row in range(x+1, len(ship_grid)):
+        if ship_grid[row][y].container:
+            return False 
+    return True
+
