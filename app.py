@@ -1,6 +1,7 @@
-from flask import Flask, request, render_template, jsonify,session
+from flask import Flask, request, render_template, jsonify, session, redirect, url_for
 from werkzeug.utils import secure_filename
 import os
+from datetime import datetime
 
 from main import *
 app = Flask(__name__)
@@ -10,15 +11,17 @@ app.config['LOAD_LOG'] = 'load_logs'
 app.config['UNLOAD_LOG'] = 'unload_logs'
 app.config['ACCEPT_EXTENSION'] = 'txt'
 
-# Secret key for session handling
+# session handling
 app.secret_key = 'adcdefghijklmnopqrstuvwxyz'
 
 global rows, cols, ship_grid, uploaded_filename
 
-# Initialize the ship grid
+# ship grid display
 rows, cols = 8, 12
 ship_grid = create_ship_grid(rows, cols)
-uploaded_filename = None  # To store the filename of the uploaded file
+
+# manifest
+uploaded_filename = None 
 
 
 def allowed_file(filename):
@@ -30,9 +33,37 @@ def allowed_file(filename):
 def submission():
     return render_template('submission.html')
 
+# baseline for ship problem logic
+@app.route('/loginPage')
+def loginPage():
+    return render_template('login.html')
+
+@app.route('/login', methods=['POST'])
+def login():
+    username = request.form.get('username')
+    if username:
+        with open(f'KeoghsPort{datetime.now().year}.txt', 'a') as f:
+            f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M")}\t{username} logged in\n')
+        return redirect(url_for('ship_options'))
+    else:
+        return redirect(url_for('loginPage'))
+
+# load/unload and balance options (and logout button)
+@app.route('/ship_options')
+def ship_options():
+    return render_template('ship_options.html')
+
+@app.route('/load_unload')
+def load_unload():
+    ship_grid = create_ship_grid(rows, cols)
+    return render_template('load_unload.html', grid=ship_grid, rows=rows, cols=cols)
+
+@app.route('/logout')
+def logout():
+    return redirect(url_for('loginPage'))
+
 @app.route('/ship_problem')
 def index():
-    # init the grid table
     ship_grid = create_ship_grid(rows, cols)
     return render_template('index.html', grid=ship_grid, rows=rows, cols=cols)
 
