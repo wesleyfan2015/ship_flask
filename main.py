@@ -1,6 +1,7 @@
 import numpy as np
 import re
 from collections import defaultdict
+import copy
 
 class Container:
     """Representation of a container with name and weight."""
@@ -253,7 +254,7 @@ def balance_ship(ship_grid, log_file=None):
     while not is_balanced:
         iteration += 1
         if iteration > max_iterations:
-            print("Balancing failed: too many iterations.")
+            print("Balancing failed: too many iterations.") #then resort to sift
             return moves
 
         # Get containers from the heavier side
@@ -360,7 +361,7 @@ def move_container(from_pos, to_pos, ship_grid):
 
 def find_available_slot(ship_grid, col_range):
     """
-    Find the nearest available slot within the specified column range.
+    Find the nearest available slot within the specified column range.  ##change this 
     """
     for x, row in enumerate(ship_grid):
         for y in col_range:  # Use the range object directly
