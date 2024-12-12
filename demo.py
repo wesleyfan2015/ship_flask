@@ -3,7 +3,7 @@ import re
 from flask import Flask, request, render_template, session
 from werkzeug.utils import secure_filename
 
-# Initialize Flask app
+# Initialize Flask application
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['OPERATION_LOG'] = 'operation_logs'
@@ -13,7 +13,7 @@ app.config['UNLOAD_LOG'] = os.path.join(app.config['OPERATION_LOG'], 'unload_log
 app.config['BUFFER_LOG'] = 'buffer_logs'
 app.config['ACCEPTED_EXTENSIONS'] = {'txt'}
 
-# Secret key for session handling
+# Secret key for session management
 app.secret_key = 'adcdefghijklmnopqrstuvwxyz'
 
 # Ensure necessary directories exist
@@ -26,41 +26,52 @@ for directory in [
 ]:
     os.makedirs(directory, exist_ok=True)
 
+
 class Container:
-    """Representation of a container with name and weight."""
-    def __init__(self, name, weight):
+    """Represents a container with a name, weight, and unload flag."""
+
+    def __init__(self, name, weight, unload=False):
         self.name = name
         self.weight = weight
+        self.unload = unload  # True if the container needs to be unloaded
+
 
 class Slot:
-    """Representation of a ship or buffer slot."""
+    """Represents a slot in the ship or buffer grid."""
+
     def __init__(self):
         self.container = None
         self.available = True
 
+
 class Buffer:
-    """Representation of a buffer with its own grid."""
+    """Represents a buffer area with its own grid."""
+
     def __init__(self, rows, columns):
         self.grid = [[Slot() for _ in range(columns)] for _ in range(rows)]
 
     def find_available_slot(self):
-        """Find the first available slot in the buffer."""
-        for x, row in enumerate(self.grid):
-            for y, slot in enumerate(row):
-                if slot.available:
+        """Finds the first available slot in the buffer starting from the bottom."""
+        for x in reversed(range(len(self.grid))):  # Start from the bottom
+            for y in range(len(self.grid[x])):
+                if self.grid[x][y].available:
                     return (x, y)
         return None  # Buffer is full
 
+
 def create_ship_grid(rows, columns):
-    """Create an empty ship grid."""
+    """Creates an empty ship grid with the specified number of rows and columns."""
     return [[Slot() for _ in range(columns)] for _ in range(rows)]
 
+
 def load_ship_grid(file_path, ship_grid):
-    """Load ship grid from a manifest file and adjust rows and columns dynamically."""
-    max_row, max_col = 0, 0  # To track the maximum row and column number
+    """Loads the ship grid from a manifest file, dynamically adjusting rows and columns."""
+    max_row, max_col = 0, 0  # Track maximum row and column indices
 
     with open(file_path, 'r') as file:
         for line in file.readlines():
+            print(f"Processing line: {line.strip()}")
+            # Update regex to match three fields
             match = re.match(r"\[(\d{2}),(\d{2})\], \{(\d+)\}, (.+)", line.strip())
             if not match:
                 print(f"Skipping invalid line: {line.strip()}")
@@ -69,12 +80,13 @@ def load_ship_grid(file_path, ship_grid):
             x, y = int(match.group(1)) - 1, int(match.group(2)) - 1
             weight = int(match.group(3))
             status = match.group(4).strip()
+            unload_flag = False  # Default to not needing unload
 
-            # Update max row and column values
+            # Update maximum row and column values
             max_row = max(max_row, x)
             max_col = max(max_col, y)
 
-            # Ensure the ship grid has enough rows and columns
+            # Ensure ship grid has enough rows and columns
             while len(ship_grid) <= max_row:
                 ship_grid.append([Slot() for _ in range(max_col + 1)])
             while len(ship_grid[x]) <= max_col:
@@ -86,18 +98,19 @@ def load_ship_grid(file_path, ship_grid):
             elif status.upper() == "UNUSED":
                 slot.available = True
             else:
-                slot.container = Container(status, weight)
+                slot.container = Container(status, weight, unload=unload_flag)
                 slot.available = False
 
-    return max_row + 1, max_col + 1  # Return the number of rows and columns
+    return max_row + 1, max_col + 1  # Return number of rows and columns
+
 
 def calculate_balance(ship_grid):
     """
-    Calculate the weight and moment (torque) of the ship's left and right sides.
+    Calculates the balance of the ship based on weight and moment.
     Returns:
-        - Left weight, right weight
-        - Left moment, right moment
-        - Whether the ship is balanced by weight (maritime law)
+        - Left weight, Right weight
+        - Left moment, Right moment
+        - Whether the ship is balanced (complies with maritime regulations)
     """
     left_weight, right_weight = 0, 0
     left_moment, right_moment = 0, 0
@@ -109,63 +122,193 @@ def calculate_balance(ship_grid):
                 weight = slot.container.weight
                 if col < mid_col:
                     left_weight += weight
-                    left_moment += weight * (mid_col - col)  # Distance to midline
+                    left_moment += weight * (mid_col - col)  # Distance from centerline
                 else:
                     right_weight += weight
-                    right_moment += weight * (col - mid_col + 1)  # Distance to midline
+                    right_moment += weight * (col - mid_col + 1)  # Distance from centerline
 
     total_weight = left_weight + right_weight
-    weight_tolerance = 0.1 * total_weight  # 10% tolerance for weight difference
+    weight_tolerance = 0.1 * total_weight  # 10% weight difference tolerance
 
-    # Check weight balance according to maritime law
+    # Check weight balance according to maritime regulations
     weight_balanced = abs(left_weight - right_weight) <= weight_tolerance
 
     return left_weight, right_weight, left_moment, right_moment, weight_balanced
 
+
 def calculate_crane_time(from_pos, to_pos, ship_grid):
-    """Calculate the time for the crane to move from the buffer to a container position,
-    move the container, and then return to the buffer."""
-    x1, y1 = from_pos  # Initial position
+    """Calculates the crane time required to move a container from buffer to ship."""
+    x1, y1 = from_pos  # Starting position
     x2, y2 = to_pos  # Target position
 
-    # Time to move crane to container (buffer to container position)
-    crane_to_container_time = 1 * (y1)  # Time per slot (1 minute per slot)
+    # Time for crane to move to container location (1 minute per slot)
+    crane_to_container_time = 1 * y1
 
-    # Time to move container from one slot to another (assuming same row)
-    move_container_time = 1 * abs(y1 - y2)  # 1 minute per slot traveled
+    # Time to move the container (assuming same row, 1 minute per slot)
+    move_container_time = 1 * abs(y1 - y2)
 
-    # Time for crane to return to the buffer
-    crane_return_time = 1 * y2  # Return time to the buffer
+    # Time for crane to return to buffer
+    crane_return_time = 1 * y2
 
     total_time = crane_to_container_time + move_container_time + crane_return_time
     return crane_to_container_time, move_container_time, crane_return_time, total_time
 
+
 def verify_buffer_integrity(buffer, ship_grid, log_file=None):
     """
-    Ensure all containers in the buffer are loaded back onto the ship.
+    Ensures that all containers in the buffer that do not need to be unloaded are loaded back onto the ship.
     """
     messages = []
     for x, row in enumerate(buffer.grid):
         for y, slot in enumerate(row):
             if slot.container:
-                available = find_available_slot(ship_grid, range(len(ship_grid[0]) // 2, len(ship_grid[0])))
-                if available:
-                    ship_x, ship_y = available
-                    ship_grid[ship_x][ship_y].container = slot.container
-                    ship_grid[ship_x][ship_y].available = False
+                container = slot.container
+                if not container.unload:
+                    # Find an available slot on the ship to load the container
+                    available = find_available_ship_slot(ship_grid)
+                    if available:
+                        ship_x, ship_y = available
+                        ship_grid[ship_x][ship_y].container = container
+                        ship_grid[ship_x][ship_y].available = False
 
-                    log_message = f"Moved {slot.container.name} from Buffer[{x + 1}, {y + 1}] to Ship[{ship_x + 1}, {ship_y + 1}].\n"
-                    messages.append(log_message)
-                    if log_file:
-                        log_file.write(log_message)
+                        log_message = f"Moved {container.name} from Buffer[{x + 1}, {y + 1}] to Ship[{ship_x + 1}, {ship_y + 1}].\n"
+                        messages.append(log_message)
+                        if log_file:
+                            log_file.write(log_message)
 
+                        # Clear the buffer slot
+                        slot.container = None
+                        slot.available = True
+                    else:
+                        message = f"Cannot return container {container.name} to the ship. Ship is full."
+                        messages.append(message)
+                        if log_file:
+                            log_file.write(message + "\n")
+                        # Continue to check the next container
+                        continue
+    return messages
+
+
+def find_available_ship_slot(ship_grid):
+    """
+    Finds the first available slot in the ship grid.
+    Returns: (x, y) or None
+    """
+    for x in range(len(ship_grid)):
+        for y in range(len(ship_grid[x])):
+            slot = ship_grid[x][y]
+            if slot.available and not slot.container:
+                return (x, y)
+    return None
+
+
+def find_first_movable_container(buffer):
+    """
+    Finds the first container in the buffer that is not marked for unloading.
+    Returns: ((x, y), container) or None
+    """
+    for x in reversed(range(len(buffer.grid))):  # Start from the bottom
+        for y in range(len(buffer.grid[x])):
+            slot = buffer.grid[x][y]
+            if slot.container and not slot.container.unload:
+                return ((x, y), slot.container)
+    return None
+
+
+def move_container(from_pos, to_pos, ship_grid):
+    """Moves a container within the ship grid from one position to another."""
+    from_x, from_y = from_pos
+    to_x, to_y = to_pos
+    container = ship_grid[from_x][from_y].container
+    ship_grid[to_x][to_y].container = container
+    ship_grid[to_x][to_y].available = False
+    ship_grid[from_x][from_y].container = None
+    ship_grid[from_x][from_y].available = True
+
+
+def load_container_with_log(container, target_pos, ship_grid, buffer, log_file):
+    """Loads a container to a specified position on the ship or moves it to the buffer based on capacity."""
+    x, y = target_pos
+    if not (0 <= x < len(ship_grid) and 0 <= y < len(ship_grid[0])):
+        return "Invalid position specified."
+
+    available_slots = calculate_available_slots(ship_grid)
+    total_slots = len(ship_grid) * len(ship_grid[0])
+    load_threshold = 0.5  # Threshold set to 50%, adjustable as needed
+
+    log_file.write(f"Attempting to load container {container.name} with weight {container.weight}.\n")
+    log_file.write(f"Current available slots: {available_slots}/{total_slots}.\n")
+
+    # Determine if the ship is nearing full capacity
+    if available_slots / total_slots < load_threshold:
+        log_file.write(f"Ship is near full capacity. Moving container {container.name} to buffer.\n")
+        # Attempt to move the container to the buffer
+        available = buffer.find_available_slot()
+        if available:
+            bx, by = available
+            buffer.grid[bx][by].container = container
+            buffer.grid[bx][by].available = False
+            # Set unload flag to True
+            buffer.grid[bx][by].container.unload = True
+            log_file.write(f"Successfully moved {container.name} to Buffer[{bx + 1}, {by + 1}].\n")
+            return f"Container {container.name} moved to Buffer[{bx + 1}, {by + 1}] because the ship is near full capacity."
+        else:
+            log_file.write(f"Buffer is full. Cannot move {container.name} to buffer.\n")
+            return "Buffer is full. Cannot load the container."
+
+    # If the ship has space, proceed to load the container
+    slot = ship_grid[x][y]
+    if slot.available:
+        log_file.write(f"Attempting to load container {container.name} to position [{x + 1}, {y + 1}].\n")
+        slot.container = container
+        slot.available = False
+        log_file.write(f"Successfully loaded {container.name} at position [{x + 1}, {y + 1}].\n")
+        return f"Loaded {container.name} at [{x + 1}, {y + 1}]."
+    else:
+        log_file.write(f"Failed to load {container.name} at position [{x + 1}, {y + 1}] - Not available.\n")
+        return f"Position [{x + 1}, {y + 1}] is not available for loading."
+
+
+def unload_container_with_log(container_name, ship_grid, buffer, log_file):
+    """
+    Unloads a specified container from the ship grid to the buffer.
+    """
+    for x, row in enumerate(ship_grid):
+        for y, slot in enumerate(row):
+            if slot.container and slot.container.name == container_name:
+                if buffer.find_available_slot():
+                    bx, by = buffer.find_available_slot()
+                    buffer.grid[bx][by].container = slot.container
+                    buffer.grid[bx][by].available = False
+                    # Set unload flag to True
+                    buffer.grid[bx][by].container.unload = True
+
+                    log_message = f"Unloaded container '{container_name}' from Ship[{x + 1}, {y + 1}] to Buffer[{bx + 1}, {by + 1}].\n"
+                    log_file.write(log_message)
+
+                    # Clear the ship slot
                     slot.container = None
                     slot.available = True
+
+                    return f"Unloaded container '{container_name}' to Buffer[{bx + 1}, {by + 1}]."
                 else:
-                    message = f"Cannot return container {slot.container.name} to the ship. Ship is full."
-                    messages.append(message)
-                    return messages
-    return messages
+                    log_message = f"Buffer is full. Cannot unload container '{container_name}'.\n"
+                    log_file.write(log_message)
+                    return "Buffer is full. Cannot unload the container."
+
+    log_message = f"Container '{container_name}' not found in ship grid.\n"
+    log_file.write(log_message)
+    return f"Container '{container_name}' not found in ship grid."
+
+
+def calculate_available_slots(ship_grid):
+    """Calculates the number of available slots on the ship."""
+    available = 0
+    for row in ship_grid:
+        for slot in row:
+            if slot.available:
+                available += 1
+    return available
 
 def find_available_slot(ship_grid, col_range):
     """
@@ -178,154 +321,6 @@ def find_available_slot(ship_grid, col_range):
                 return (x, y)
     print("No available slot found.")
     return None
-
-def move_container(from_pos, to_pos, ship_grid):
-    """Move a container from one position to another on the ship grid."""
-    from_x, from_y = from_pos
-    to_x, to_y = to_pos
-    container = ship_grid[from_x][from_y].container
-    ship_grid[to_x][to_y].container = container
-    ship_grid[to_x][to_y].available = False
-    ship_grid[from_x][from_y].container = None
-    ship_grid[from_x][from_y].available = True
-
-def move_to_buffer(from_pos, buffer, ship_grid, log_file=None):
-    """
-    Move a container from the ship to the buffer.
-    """
-    x, y = from_pos
-    slot = ship_grid[x][y]
-    if not slot.container:
-        return "No container at the specified position to move."
-
-    available = buffer.find_available_slot()
-    if not available:
-        return "Buffer is full. Cannot move container to buffer."
-
-    bx, by = available
-    buffer.grid[bx][by].container = slot.container
-    buffer.grid[bx][by].available = False
-
-    if log_file:
-        log_message = f"Moved {buffer.grid[bx][by].container.name} from Ship[{x + 1}, {y + 1}] to Buffer[{bx + 1}, {by + 1}].\n"
-        log_file.write(log_message)
-        log_file.flush()
-
-    slot.container = None
-    slot.available = True
-
-    return f"Moved {buffer.grid[bx][by].container.name} to Buffer[{bx + 1}, {by + 1}]."
-
-def move_from_buffer(to_pos, buffer, ship_grid, log_file=None):
-    """
-    Move a container from the buffer back to the ship.
-    """
-    bx, by = to_pos
-    buffer_slot = buffer.grid[bx][by]
-    if not buffer_slot.container:
-        return "No container at the specified buffer position to move."
-
-    available = find_available_slot(ship_grid, range(len(ship_grid[0]) // 2, len(ship_grid[0])))
-    if not available:
-        return "No available slot on the ship to move the container."
-
-    x, y = available
-    ship_grid[x][y].container = buffer_slot.container
-    ship_grid[x][y].available = False
-
-    if log_file:
-        log_message = f"Moved {ship_grid[x][y].container.name} from Buffer[{bx + 1}, {by + 1}] to Ship[{x + 1}, {y + 1}].\n"
-        log_file.write(log_message)
-        log_file.flush()
-
-    buffer_slot.container = None
-    buffer_slot.available = True
-
-    return f"Moved {ship_grid[x][y].container.name} to Ship[{x + 1}, {y + 1}]."
-
-def move_within_buffer(from_pos, to_pos, buffer, log_file=None):
-    """
-    Move a container within the buffer.
-    """
-    fx, fy = from_pos
-    tx, ty = to_pos
-    from_slot = buffer.grid[fx][fy]
-    to_slot = buffer.grid[tx][ty]
-
-    if not from_slot.container:
-        return "No container at the source buffer position to move."
-
-    if not to_slot.available:
-        return "Target buffer position is not available."
-
-    to_slot.container = from_slot.container
-    to_slot.available = False
-
-    from_slot.container = None
-    from_slot.available = True
-
-    if log_file:
-        log_message = f"Moved {to_slot.container.name} from Buffer[{fx + 1}, {fy + 1}] to Buffer[{tx + 1}, {ty + 1}].\n"
-        log_file.write(log_message)
-        log_file.flush()
-
-    return f"Moved {to_slot.container.name} to Buffer[{tx + 1}, {ty + 1}]."
-
-def load_container_with_log(container, target_pos, ship_grid, log_file):
-    """Load a container to a specified position on the ship."""
-    x, y = target_pos
-    if not (0 <= x < len(ship_grid) and 0 <= y < len(ship_grid[0])):
-        return "Invalid position specified."
-
-    slot = ship_grid[x][y]
-    if slot.available:
-        log_file.write(f"Attempting to load container {container.name} to position [{x + 1}, {y + 1}].\n")
-        slot.container = container
-        slot.available = False
-        log_file.write(f"Successfully loaded {container.name} at position [{x + 1}, {y + 1}].\n")
-        return f"Loaded {container.name} at [{x + 1}, {y + 1}]."
-    else:
-        log_file.write(f"Failed to load {container.name} at position [{x + 1}, {y + 1}] - Not available.\n")
-        return f"Position [{x + 1}, {y + 1}] is not available for loading."
-
-def unload_container_with_log(container_name, ship_grid, buffer, log_file):
-    """Unload a container with the specified name from the ship, utilizing the buffer."""
-    container_name = container_name.lower()
-    for x, row in enumerate(ship_grid):
-        for y, slot in enumerate(row):
-            if slot.container and slot.container.name.lower() == container_name:
-                log_file.write(f"Found container {container_name} at [{x + 1}, {y + 1}].\n")
-
-                # Identify containers above the target container (assuming y-axis is vertical)
-                containers_above = [(x, col) for col in range(y + 1, len(row)) if row[col].container]
-
-                # Move containers above to buffer
-                for pos in containers_above:
-                    move_result = move_to_buffer(pos, buffer, ship_grid, log_file)
-                    log_file.write(move_result + "\n")
-
-                # Unload the target container
-                actual_weight = 5432 if container_name == "pig" else slot.container.weight
-
-                if actual_weight != slot.container.weight:
-                    log_message = (
-                        f"Container {container_name.capitalize()} weighs {actual_weight}, not {slot.container.weight}. "
-                        f"Have unloaded as normal. The seals on the door are intact.\n"
-                    )
-                    log_file.write(log_message)
-                else:
-                    log_file.write(f"Unloaded container {container_name} from [{x + 1}, {y + 1}].\n")
-
-                slot.container = None
-                slot.available = True
-
-                # Move containers back from buffer to ship
-                for pos in containers_above:
-                    move_result = move_from_buffer(pos, buffer, ship_grid, log_file)
-                    log_file.write(move_result + "\n")
-
-                return f"Unloaded {container_name} from [{x + 1}, {y + 1}]."
-    return f"{container_name} not found on the ship."
 
 def balance_ship(ship_grid, buffer, log_file=None):
     """
@@ -432,7 +427,7 @@ def balance_ship(ship_grid, buffer, log_file=None):
 
 @app.route('/')
 def index():
-    """Render the main interface displaying the current ship and buffer grids."""
+    """Renders the main interface displaying the current ship and buffer grids."""
     return render_template(
         'demo.html',
         grid=ship_grid,
@@ -443,9 +438,10 @@ def index():
         buffer_cols=buffer_cols
     )
 
+
 @app.route('/upload', methods=['POST'])
 def upload():
-    """Handle the uploaded file and load the ship grid."""
+    """Handles file upload and loads the ship grid."""
     global ship_grid, buffer, rows, cols
     buffer = Buffer(buffer_rows, buffer_cols)  # Reset buffer
     ship_grid = create_ship_grid(rows, cols)  # Reset ship grid
@@ -462,7 +458,7 @@ def upload():
     session['uploaded_filename'] = filename
 
     try:
-        rows, cols = load_ship_grid(file_path, ship_grid)  # Dynamically get rows and cols
+        rows, cols = load_ship_grid(file_path, ship_grid)  # Dynamically get rows and columns
         return render_template(
             'demo.html',
             grid=ship_grid,
@@ -475,11 +471,12 @@ def upload():
     except Exception as e:
         return f"Error loading ship grid: {e}", 500
 
+
 @app.route('/balance', methods=['POST'])
 def balance_route():
-    """Balance the ship grid."""
+    """Balances the ship grid."""
     try:
-        # Retrieve the uploaded filename from the session
+        # Get the uploaded filename from session
         uploaded_filename = session.get('uploaded_filename')
         if not uploaded_filename:
             return "No file uploaded. Please upload a manifest file first.", 400
@@ -503,30 +500,32 @@ def balance_route():
     except Exception as e:
         return f"Error balancing ship grid: {e}", 500
 
+
 @app.route('/load', methods=['POST'])
 def load_route():
-    """Load a container onto the ship."""
+    """Loads a container onto the ship."""
     try:
-        # Retrieve the uploaded filename from the session
+        # Get the uploaded filename from session
         uploaded_filename = session.get('uploaded_filename')
         if not uploaded_filename:
             return "No file uploaded. Please upload a manifest file first.", 400
 
-        # Retrieve input from the form
+        # Get input from the form
         container_name = request.form['load']
-        row = int(request.form['row']) - 1  # Adjust to zero-indexing
-        col = int(request.form['col']) - 1  # Adjust to zero-indexing
+        row = int(request.form['row']) - 1  # Adjust to zero index
+        col = int(request.form['col']) - 1  # Adjust to zero index
         weight = float(request.form['weight'])
+        unload_flag = False  # Default to not needing unload
 
         # Create a container object
-        container = Container(name=container_name, weight=weight)
+        container = Container(name=container_name, weight=weight, unload=unload_flag)
 
         log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_load_log.log'
         log_file_path = os.path.join(app.config['LOAD_LOG'], log_file_name)
 
         with open(log_file_path, 'a') as log_file:
-            # Perform the load operation and pass the log file for writing
-            message = load_container_with_log(container, (row, col), ship_grid, log_file)
+            # Perform load operation with logging
+            message = load_container_with_log(container, (row, col), ship_grid, buffer, log_file)
 
         return render_template(
             'demo.html',
@@ -541,22 +540,23 @@ def load_route():
     except Exception as e:
         return f"Error loading ship grid: {e}", 500
 
+
 @app.route('/unload', methods=['POST'])
 def unload_route():
-    """Unload a container from the ship using the buffer."""
+    """Unloads a container from the ship to the buffer."""
     try:
         uploaded_filename = session.get('uploaded_filename')
         if not uploaded_filename:
             return "No file uploaded. Please upload a manifest file first.", 400
 
-        # Retrieve the container name from the form
+        # Get container name from the form
         container_name = request.form['container_name']
 
         log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_unload_log.log'
         log_file_path = os.path.join(app.config['UNLOAD_LOG'], log_file_name)
 
         with open(log_file_path, 'a') as log_file:
-            # Perform the unload operation and pass the log file for writing
+            # Perform unload operation with logging
             message = unload_container_with_log(container_name, ship_grid, buffer, log_file)
 
         return render_template(
@@ -572,132 +572,10 @@ def unload_route():
     except Exception as e:
         return f"Error unloading container: {e}", 500
 
-@app.route('/move_to_buffer', methods=['POST'])
-def move_to_buffer_route():
-    """Move a container from the ship to the buffer."""
-    try:
-        uploaded_filename = session.get('uploaded_filename')
-        if not uploaded_filename:
-            return "No file uploaded. Please upload a manifest file first.", 400
-
-        # Retrieve ship positions from the form
-        ship_x = int(request.form['ship_x']) - 1
-        ship_y = int(request.form['ship_y']) - 1
-
-        # Validate that the specified position is within the ship grid
-        if not (0 <= ship_x < rows and 0 <= ship_y < cols):
-            return "Specified position is out of ship grid bounds.", 400
-
-        # Check if there is a container at the specified ship position
-        if not ship_grid[ship_x][ship_y].container:
-            return f"No container at Ship[{ship_x + 1}, {ship_y + 1}] to move.", 400
-
-        log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_buffer_log.log'
-        log_file_path = os.path.join(app.config['BUFFER_LOG'], log_file_name)
-
-        with open(log_file_path, 'a') as log_file:
-            # Perform the move to buffer and log the action
-            message = move_to_buffer((ship_x, ship_y), buffer, ship_grid, log_file)
-
-        return render_template(
-            'demo.html',
-            grid=ship_grid,
-            buffer=buffer,
-            rows=rows,
-            cols=cols,
-            buffer_rows=buffer_rows,
-            buffer_cols=buffer_cols,
-            message=message
-        )
-    except Exception as e:
-        return f"Error moving to buffer: {e}", 500
-
-@app.route('/move_from_buffer', methods=['POST'])
-def move_from_buffer_route():
-    """Move a container from the buffer back to the ship."""
-    try:
-        uploaded_filename = session.get('uploaded_filename')
-        if not uploaded_filename:
-            return "No file uploaded. Please upload a manifest file first.", 400
-
-        # Retrieve buffer positions from the form
-        buffer_x = int(request.form['buffer_x']) - 1
-        buffer_y = int(request.form['buffer_y']) - 1
-
-        # Validate that the specified position is within the buffer grid
-        if not (0 <= buffer_x < buffer_rows and 0 <= buffer_y < buffer_cols):
-            return "Specified position is out of buffer grid bounds.", 400
-
-        # Check if there is a container at the specified buffer position
-        if not buffer.grid[buffer_x][buffer_y].container:
-            return f"No container at Buffer[{buffer_x + 1}, {buffer_y + 1}] to move.", 400
-
-        log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_buffer_log.log'
-        log_file_path = os.path.join(app.config['BUFFER_LOG'], log_file_name)
-
-        with open(log_file_path, 'a') as log_file:
-            # Perform the move from buffer and log the action
-            message = move_from_buffer((buffer_x, buffer_y), buffer, ship_grid, log_file)
-
-        return render_template(
-            'demo.html',
-            grid=ship_grid,
-            buffer=buffer,
-            rows=rows,
-            cols=cols,
-            buffer_rows=buffer_rows,
-            buffer_cols=buffer_cols,
-            message=message
-        )
-    except Exception as e:
-        return f"Error moving from buffer: {e}", 500
-
-@app.route('/move_within_buffer', methods=['POST'])
-def move_within_buffer_route():
-    """Move a container within the buffer."""
-    try:
-        uploaded_filename = session.get('uploaded_filename')
-        if not uploaded_filename:
-            return "No file uploaded. Please upload a manifest file first.", 400
-
-        # Retrieve source and target buffer positions from the form
-        from_x = int(request.form['from_x']) - 1
-        from_y = int(request.form['from_y']) - 1
-        to_x = int(request.form['to_x']) - 1
-        to_y = int(request.form['to_y']) - 1
-
-        # Validate that the specified positions are within the buffer grid
-        if not (0 <= from_x < buffer_rows and 0 <= from_y < buffer_cols and
-                0 <= to_x < buffer_rows and 0 <= to_y < buffer_cols):
-            return "Specified positions are out of buffer grid bounds.", 400
-
-        # Check if there is a container at the source buffer position
-        if not buffer.grid[from_x][from_y].container:
-            return f"No container at Buffer[{from_x + 1}, {from_y + 1}] to move.", 400
-
-        log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_buffer_log.log'
-        log_file_path = os.path.join(app.config['BUFFER_LOG'], log_file_name)
-
-        with open(log_file_path, 'a') as log_file:
-            # Perform the move within buffer and log the action
-            message = move_within_buffer((from_x, from_y), (to_x, to_y), buffer, log_file)
-
-        return render_template(
-            'demo.html',
-            grid=ship_grid,
-            buffer=buffer,
-            rows=rows,
-            cols=cols,
-            buffer_rows=buffer_rows,
-            buffer_cols=buffer_cols,
-            message=message
-        )
-    except Exception as e:
-        return f"Error moving within buffer: {e}", 500
 
 @app.route('/depart', methods=['POST'])
 def depart_route():
-    """Finalize operations before ship departure, ensuring buffer integrity."""
+    """Ensures buffer integrity before the ship departs."""
     try:
         uploaded_filename = session.get('uploaded_filename')
         if not uploaded_filename:
@@ -737,15 +615,94 @@ def depart_route():
     except Exception as e:
         return f"Error during departure: {e}", 500
 
+
+@app.route('/next', methods=['POST'])
+def next_route():
+    """Handles moving a container from the buffer to the ship grid."""
+    try:
+        # Get the uploaded filename from session
+        uploaded_filename = session.get('uploaded_filename')
+        if not uploaded_filename:
+            return "No file uploaded. Please upload a manifest file first.", 400
+
+        # Set the log file path
+        log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_next_log.log'
+        log_file_path = os.path.join(app.config['LOAD_LOG'], log_file_name)
+
+        with open(log_file_path, 'a') as log_file:
+            # Find the first movable container in the buffer
+            container_info = find_first_movable_container(buffer)
+            if not container_info:
+                message = "No movable containers in buffer."
+                log_file.write(message + "\n")
+                return render_template(
+                    'demo.html',
+                    grid=ship_grid,
+                    buffer=buffer,
+                    rows=rows,
+                    cols=cols,
+                    buffer_rows=buffer_rows,
+                    buffer_cols=buffer_cols,
+                    message=message
+                )
+
+            (bx, by), container = container_info
+
+            # Find an available slot on the ship
+            ship_slot = find_available_ship_slot(ship_grid)
+            if not ship_slot:
+                message = "No available slots in ship grid to move the container."
+                log_file.write(message + "\n")
+                return render_template(
+                    'demo.html',
+                    grid=ship_grid,
+                    buffer=buffer,
+                    rows=rows,
+                    cols=cols,
+                    buffer_rows=buffer_rows,
+                    buffer_cols=buffer_cols,
+                    message=message
+                )
+
+            sx, sy = ship_slot
+
+            # Perform the move operation
+            ship_grid[sx][sy].container = container
+            ship_grid[sx][sy].available = False
+
+            buffer.grid[bx][by].container = None
+            buffer.grid[bx][by].available = True
+
+            # Log the move
+            log_message = f"Moved container '{container.name}' from Buffer[{bx + 1}, {by + 1}] to Ship[{sx + 1}, {sy + 1}].\n"
+            log_file.write(log_message)
+
+            message = f"Moved container '{container.name}' to Ship[{sx + 1}, {sy + 1}]."
+            return render_template(
+                'demo.html',
+                grid=ship_grid,
+                buffer=buffer,
+                rows=rows,
+                cols=cols,
+                buffer_rows=buffer_rows,
+                buffer_cols=buffer_cols,
+                message=message
+            )
+    except Exception as e:
+        return f"Error during next operation: {e}", 500
+
+
 def allowed_file(filename):
-    """Check if the file has the correct extension."""
+    """Checks if the file has an allowed extension."""
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in app.config['ACCEPTED_EXTENSIONS']
 
-# Global Variables
-rows, cols = 8, 12  # Default ship grid size
-buffer_rows, buffer_cols = 2, 5  # Default buffer grid size
+
+# Global variables
+rows, cols = 8, 12  # Ship grid size (rows x columns)
+buffer_rows, buffer_cols = 4, 24  # Buffer grid size (rows x columns)
 ship_grid = create_ship_grid(rows, cols)
 buffer = Buffer(buffer_rows, buffer_cols)
+
 
 if __name__ == '__main__':
     app.run(debug=True)

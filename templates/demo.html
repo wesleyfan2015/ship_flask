@@ -142,6 +142,11 @@
 <body>
     <h1>Ship Management System</h1>
 
+    <form id="nextForm" action="/next" method="POST">
+        <h3>Next Operation:</h3>
+        <button type="submit">Next</button>
+    </form>
+
     <div class="container-section">
         <!-- Left Section: Upload and Ship Grid -->
         <div class="section">
@@ -217,54 +222,6 @@
                     {% endfor %}
                 </tbody>
             </table>
-
-            <h2>Buffer Operations:</h2>
-            <form id="moveToBufferForm" action="/move_to_buffer" method="POST">
-                <h3>Move to Buffer:</h3>
-                <div class="form-group">
-                    <label for="ship_x">Ship Row:</label>
-                    <input type="number" name="ship_x" id="ship_x" placeholder="Enter ship row" required min="1" max="{{ rows }}">
-                </div>
-                <div class="form-group">
-                    <label for="ship_y">Ship Column:</label>
-                    <input type="number" name="ship_y" id="ship_y" placeholder="Enter ship column" required min="1" max="{{ cols }}">
-                </div>
-                <button type="submit">Move to Buffer</button>
-            </form>
-
-            <form id="moveFromBufferForm" action="/move_from_buffer" method="POST">
-                <h3>Move from Buffer:</h3>
-                <div class="form-group">
-                    <label for="buffer_x">Buffer Row:</label>
-                    <input type="number" name="buffer_x" id="buffer_x" placeholder="Enter buffer row" required min="1" max="{{ buffer_rows }}">
-                </div>
-                <div class="form-group">
-                    <label for="buffer_y">Buffer Column:</label>
-                    <input type="number" name="buffer_y" id="buffer_y" placeholder="Enter buffer column" required min="1" max="{{ buffer_cols }}">
-                </div>
-                <button type="submit">Move from Buffer</button>
-            </form>
-
-            <form id="moveWithinBufferForm" action="/move_within_buffer" method="POST">
-                <h3>Move Within Buffer:</h3>
-                <div class="form-group">
-                    <label for="from_x">From Row:</label>
-                    <input type="number" name="from_x" id="from_x" placeholder="Enter source row" required min="1" max="{{ buffer_rows }}">
-                </div>
-                <div class="form-group">
-                    <label for="from_y">From Column:</label>
-                    <input type="number" name="from_y" id="from_y" placeholder="Enter source column" required min="1" max="{{ buffer_cols }}">
-                </div>
-                <div class="form-group">
-                    <label for="to_x">To Row:</label>
-                    <input type="number" name="to_x" id="to_x" placeholder="Enter target row" required min="1" max="{{ buffer_rows }}">
-                </div>
-                <div class="form-group">
-                    <label for="to_y">To Column:</label>
-                    <input type="number" name="to_y" id="to_y" placeholder="Enter target column" required min="1" max="{{ buffer_cols }}">
-                </div>
-                <button type="submit">Move Within Buffer</button>
-            </form>
         </div>
     </div>
 
