@@ -26,7 +26,7 @@ for directory in [
 ]:
     os.makedirs(directory, exist_ok=True)
 
-
+# container
 class Container:
     """Represents a container with a name, weight, and unload flag."""
 
@@ -35,7 +35,7 @@ class Container:
         self.weight = weight
         self.unload = unload  # True if needs to be unloaded
 
-
+# slots in ship grid
 class Slot:
     """Represents a slot in the ship or buffer grid."""
 
@@ -43,7 +43,7 @@ class Slot:
         self.container = None
         self.available = True
 
-
+# buffer that contains the containers
 class Buffer:
     """Represents a buffer area with its own grid."""
 
@@ -58,12 +58,12 @@ class Buffer:
                     return (x, y)
         return None  # Buffer is full
 
-
+# create the ship grid
 def create_ship_grid(rows, columns):
     """Creates an empty ship grid with specified number of rows and columns."""
     return [[Slot() for _ in range(columns)] for _ in range(rows)]
 
-
+# load the ship grid
 def load_ship_grid(file_path, ship_grid):
     """Loads the ship grid from a manifest file, dynamically adjusting rows and columns."""
     max_row, max_col = 0, 0  # Track maximum row and column indices
@@ -103,7 +103,7 @@ def load_ship_grid(file_path, ship_grid):
 
     return max_row + 1, max_col + 1  # Return number of rows and columns
 
-
+# calculate the weight balance from middle to left and right
 def calculate_balance(ship_grid):
     """
     Calculates the balance of the ship based on weight and moment.
@@ -135,7 +135,7 @@ def calculate_balance(ship_grid):
 
     return left_weight, right_weight, left_moment, right_moment, weight_balanced
 
-
+# calculate how many time moving the crane between buffer and ship grid
 def calculate_crane_time(from_pos, to_pos, ship_grid):
     """Calculates the crane time required to move a container from buffer to ship."""
     x1, y1 = from_pos  # Starting position
@@ -153,7 +153,7 @@ def calculate_crane_time(from_pos, to_pos, ship_grid):
     total_time = crane_to_container_time + move_container_time + crane_return_time
     return crane_to_container_time, move_container_time, crane_return_time, total_time
 
-
+# verify the buffer integrity
 def verify_buffer_integrity(buffer, ship_grid, log_file=None):
     """
     Ensures that all containers in the buffer that do not need to be unloaded are loaded back onto the ship.
@@ -187,7 +187,7 @@ def verify_buffer_integrity(buffer, ship_grid, log_file=None):
                         continue
     return messages
 
-
+# find all possible slot in the ship grid.
 def find_available_slot(ship_grid, col_range):
     """
     Finds the nearest available slot within the specified column range.
@@ -200,7 +200,7 @@ def find_available_slot(ship_grid, col_range):
     print("No available slot found.")
     return None
 
-
+# find if there is any container in the buffer area that can be move back into the ship grid
 def find_first_movable_container(buffer, ship_grid, log_file=None):
     """
     Finds the first container in the buffer that is not marked for unloading and can be moved to the ship.
@@ -227,7 +227,7 @@ def find_first_movable_container(buffer, ship_grid, log_file=None):
         log_file.write("No movable containers found in buffer.\n")
     return None
 
-
+# function to move the container from one position to another
 def move_container(from_pos, to_pos, ship_grid):
     """Moves a container within the ship grid from one position to another."""
     from_x, from_y = from_pos
@@ -238,7 +238,7 @@ def move_container(from_pos, to_pos, ship_grid):
     ship_grid[from_x][from_y].container = None
     ship_grid[from_x][from_y].available = True
 
-
+# load container into ship gird, if the ship gird is 50% full, move the container to the buffer
 def load_container_with_log(container, target_pos, ship_grid, buffer, log_file):
     """
     Loads a container into the specified position on the ship, or moves it to the buffer based on capacity.
@@ -283,7 +283,7 @@ def load_container_with_log(container, target_pos, ship_grid, buffer, log_file):
         log_file.write(f"Failed to load {container.name} at position [{x + 1}, {y + 1}] - Not available.\n")
         return f"Position [{x + 1}, {y + 1}] is not available for loading."
 
-
+# unload the container into the void
 def unload_container_with_log(container_name, ship_grid, log_file):
     """
     Unloads the specified container from the ship grid and completely removes it from the system.
@@ -304,7 +304,7 @@ def unload_container_with_log(container_name, ship_grid, log_file):
     log_file.write(log_message)
     return f"Container '{container_name}' not found in ship grid."
 
-
+# count the number of available slots in the ship gird
 def calculate_available_slots(ship_grid):
     """Calculates the number of available slots in the ship grid."""
     available = 0
@@ -314,7 +314,7 @@ def calculate_available_slots(ship_grid):
                 available += 1
     return available
 
-
+# balance the ship gird
 def balance_ship(ship_grid, buffer, log_file=None):
     """
     Balances the ship to meet weight and moment conditions while tracking crane time.
@@ -478,6 +478,8 @@ def index():
     """Renders the main interface displaying the current ship and buffer grids."""
     return render_template(
         'demo.html',
+        # blow are the interaction required for the demo.html
+        # basically just two sets of girds, one for ship and one for buffer
         grid=ship_grid,
         buffer=buffer,
         rows=rows,
@@ -503,6 +505,7 @@ def upload():
     file.save(file_path)
 
     # Store the uploaded filename in the session
+    # After stored in session, it can be brought to other page.
     session['uploaded_filename'] = filename
 
     try:
