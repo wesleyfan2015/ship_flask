@@ -106,14 +106,12 @@ def load_ship_grid(file_path, ship_grid):
 # calculate the weight balance from middle to left and right
 def calculate_balance(ship_grid):
     """
-    Calculates the balance of the ship based on weight and moment.
+    Calculates the balance of the ship based on weight
     Returns:
         - Left weight, Right weight
-        - Left moment, Right moment
         - Whether the ship is balanced (according to maritime regulations)
     """
     left_weight, right_weight = 0, 0
-    left_moment, right_moment = 0, 0
     mid_col = len(ship_grid[0]) // 2  # Center line column index
 
     for row in ship_grid:
@@ -122,18 +120,15 @@ def calculate_balance(ship_grid):
                 weight = slot.container.weight
                 if col < mid_col:
                     left_weight += weight
-                    left_moment += weight * (mid_col - col)  # Distance from center line
                 else:
                     right_weight += weight
-                    right_moment += weight * (col - mid_col + 1)  # Distance from center line
 
-    total_weight = left_weight + right_weight
-    weight_tolerance = 0.1 * total_weight  # 10% weight difference tolerance
+    weight_tolerance = 0.1 * max(left_weight, right_weight)  # 10% weight difference tolerance
 
     # Check weight balance according to maritime regulations
     weight_balanced = abs(left_weight - right_weight) <= weight_tolerance
-
-    return left_weight, right_weight, left_moment, right_moment, weight_balanced
+    
+    return left_weight, right_weight, weight_balanced
 
 # calculate how many time moving the crane between buffer and ship grid
 def calculate_crane_time(from_pos, to_pos, ship_grid):
@@ -492,21 +487,26 @@ def index():
 @app.route('/upload', methods=['POST'])
 def upload():
     """Handles file upload and loads the ship grid."""
-    global ship_grid, buffer, rows, cols
-    buffer = Buffer(buffer_rows, buffer_cols)  # Reset buffer
-    ship_grid = create_ship_grid(rows, cols)  # Reset ship grid
-
     file = request.files.get('file')
     if not file or not allowed_file(file.filename):
         return "Invalid file type. Please upload a .txt file.", 400
 
     filename = secure_filename(file.filename)
+    global file_path
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
 
     # Store the uploaded filename in the session
     # After stored in session, it can be brought to other page.
     session['uploaded_filename'] = filename
+
+    return redirect(url_for('ship_options.html'))
+
+@app.route('/load_unload', methods=['POST'])
+def load_unload():
+    global ship_grid, buffer, rows, cols
+    buffer = Buffer(buffer_rows, buffer_cols)  # Reset buffer
+    ship_grid = create_ship_grid(rows, cols)  # Reset ship grid
 
     try:
         rows, cols = load_ship_grid(file_path, ship_grid)  # Dynamically get rows and columns
@@ -521,7 +521,6 @@ def upload():
         )
     except Exception as e:
         return f"Error loading ship grid: {e}", 500
-
 
 @app.route('/balance', methods=['POST'])
 def balance_route():
