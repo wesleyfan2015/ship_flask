@@ -623,47 +623,47 @@ def unload_route():
         return f"Error unloading container: {e}", 500
 
 
-@app.route('/depart', methods=['POST'])
-def depart_route():
-    """Ensures buffer integrity before ship departure."""
-    try:
-        uploaded_filename = session.get('uploaded_filename')
-        if not uploaded_filename:
-            return "No file uploaded. Please upload a manifest file first.", 400
+# @app.route('/depart', methods=['POST'])
+# def depart_route():
+#     """Ensures buffer integrity before ship departure."""
+#     try:
+#         uploaded_filename = session.get('uploaded_filename')
+#         if not uploaded_filename:
+#             return "No file uploaded. Please upload a manifest file first.", 400
 
-        log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_departure_log.log'
-        log_file_path = os.path.join(app.config['BALANCE_LOG'], log_file_name)
+#         log_file_name = uploaded_filename.rsplit('.', 1)[0] + '_departure_log.log'
+#         log_file_path = os.path.join(app.config['BALANCE_LOG'], log_file_name)
 
-        with open(log_file_path, 'a') as log_file:
-            integrity_messages = verify_buffer_integrity(buffer, ship_grid, log_file)
-            for msg in integrity_messages:
-                log_file.write(msg + "\n")
+#         with open(log_file_path, 'a') as log_file:
+#             integrity_messages = verify_buffer_integrity(buffer, ship_grid, log_file)
+#             for msg in integrity_messages:
+#                 log_file.write(msg + "\n")
 
-        if any("Cannot return" in msg for msg in integrity_messages):
-            return render_template(
-                'demo.html',
-                grid=ship_grid,
-                buffer=buffer,
-                rows=rows,
-                cols=cols,
-                buffer_rows=buffer_rows,
-                buffer_cols=buffer_cols,
-                message="Departure failed: " + integrity_messages[0]
-            )
+#         if any("Cannot return" in msg for msg in integrity_messages):
+#             return render_template(
+#                 'demo.html',
+#                 grid=ship_grid,
+#                 buffer=buffer,
+#                 rows=rows,
+#                 cols=cols,
+#                 buffer_rows=buffer_rows,
+#                 buffer_cols=buffer_cols,
+#                 message="Departure failed: " + integrity_messages[0]
+#             )
 
-        balance_message = "Ship is departing with all buffer containers properly loaded."
-        return render_template(
-            'demo.html',
-            grid=ship_grid,
-            buffer=buffer,
-            rows=rows,
-            cols=cols,
-            buffer_rows=buffer_rows,
-            buffer_cols=buffer_cols,
-            message=balance_message
-        )
-    except Exception as e:
-        return f"Error during departure: {e}", 500
+#         balance_message = "Ship is departing with all buffer containers properly loaded."
+#         return render_template(
+#             'demo.html',
+#             grid=ship_grid,
+#             buffer=buffer,
+#             rows=rows,
+#             cols=cols,
+#             buffer_rows=buffer_rows,
+#             buffer_cols=buffer_cols,
+#             message=balance_message
+#         )
+#     except Exception as e:
+#         return f"Error during departure: {e}", 500
 
 
 @app.route('/next', methods=['POST'])
