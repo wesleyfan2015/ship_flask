@@ -12,14 +12,19 @@
             background-color: #f4f4f4;
         }
 
-        h1, h2, h3 {
+        h1, h3 {
             text-align: center;
+        }
+
+        h2 {
+            text-align: left;
         }
 
         .container-section {
             display: flex;
-            flex-wrap: wrap;
             gap: 20px;
+            flex-direction: column;
+            align-items: flex-start;
         }
 
         .section {
@@ -67,12 +72,6 @@
             font-weight: bold;
         }
 
-        form {
-            display: flex;
-            flex-direction: column;
-            gap: 10px;
-        }
-
         .form-group {
             display: flex;
             flex-direction: column;
@@ -89,33 +88,22 @@
         }
 
         button {
-            background-color: #4CAF50;
+            background-color: #3790a5;
             color: white;
             cursor: pointer;
             transition: background-color 0.3s;
         }
 
         button:hover {
-            background-color: #45a049;
+            background-color: #2c7a8b;
         }
 
-        /* Specific button styles */
-        button.unload-button {
-            background-color: #f44336; /* Red color for unload action */
-        }
-
-        button.unload-button:hover {
-            background-color: #e53935;
-        }
-
-        /* Grid Titles */
         .grid-title {
             text-align: center;
             margin-bottom: 10px;
             font-weight: bold;
         }
 
-        /* Message Styling */
         .message {
             text-align: center;
             margin-top: 10px;
@@ -123,155 +111,156 @@
             color: #333333;
         }
 
-        #ship_grid {
-            td {
-                padding: 15px;
-                text-align: center;
-                font-size: 14px;
-                min-width: 40px;
-                height: 25px;
-                vertical-align: middle;
-                cursor: pointer;
+        #ship_grid td {
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+            min-width: 34px;
+            height: 20px;
+            vertical-align: middle;
+            cursor: pointer;
             }
+        #ship_grid {
             width: 50%;
             border-collapse: collapse;
             margin: 20px 0;
         }
+
+        #buffer_grid td {
+            padding: 15px;
+            text-align: center;
+            font-size: 14px;
+            min-width: 10px;
+            height: 12px;
+            vertical-align: middle;
+            cursor: pointer;
+        }
+
+        #buffer_grid {
+            width: 25%;
+            border-collapse: collapse;
+            margin: 20px 0;
+        }
+    
     </style>
 </head>
 <body>
-    <h1>Ship Management System</h1>
+    <h1>Load/Unload</h1>
 
-    <form id="nextForm" action="/next" method="POST">
+    <form id="nextForm" style="text-align:center;" action="/next" method="POST">
         <h3>Next Operation:</h3>
         <button type="submit">Next</button>
     </form>
 
-    <div class="container-section">
-        <!-- Left Section: Upload and Ship Grid -->
-        <div class="section">
-            <h2>Upload Manifest File</h2>
-            <form id="uploadForm" action="/upload" method="POST" enctype="multipart/form-data">
-                <input type="file" name="file" accept=".txt" required>
-                <button type="submit">Upload</button>
-            </form>
-
-            <h2>Ship Grid:</h2>
-            <table id = "ship_grid">
-{#                <thead>#}
-{#                    <tr>#}
-{#                        {% for col in range(cols) %}#}
-{#                            <th>{{ col + 1 }}</th>#}
-{#                        {% endfor %}#}
-{#                    </tr>#}
-{#                </thead>#}
-                <tbody>
-                    {% for row in grid[::-1] %} <!-- Reverse the grid data to display rows from bottom to top -->
-                        <tr>
-                            {% for col in range(cols) %}
-                                <td class="
-                                    {% if row[col].container %}
-                                        container
-                                    {% elif row[col].available %}
-                                        unused
-                                    {% else %}
-                                        nan
-                                    {% endif %}
-                                ">
-                                    {% if row[col].container %}
-                                        {{ row[col].container.name }} ({{ row[col].container.weight }})
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-
-        <!-- Right Section: Buffer Grid and Operations -->
-        <div class="section">
-            <h2>Buffer Grid:</h2>
-            <table>
-                <thead>
-                    <tr>
-                        {% for col in range(buffer_cols) %}
-                            <th>{{ col + 1 }}</th>
+    <div style="display:flex;">
+        <div class="container-section">
+            <div class="section">
+                <h2>Ship</h2>
+                <table id="ship_grid">
+    {#                <thead>#}
+    {#                    <tr>#}
+    {#                        {% for col in range(cols) %}#}
+    {#                            <th>{{ col + 1 }}</th>#}
+    {#                        {% endfor %}#}
+    {#                    </tr>#}
+    {#                </thead>#}
+                    <tbody>
+                        {% for row in grid[::-1] %} <!-- Reverse the grid data to display rows from bottom to top -->
+                            <tr>
+                                {% for col in range(cols) %}
+                                    <td class="
+                                        {% if row[col].container %}
+                                            container
+                                        {% elif row[col].available %}
+                                            unused
+                                        {% else %}
+                                            nan
+                                        {% endif %}
+                                    ">
+                                        {% if row[col].container %}
+                                            {{ row[col].container.name }} ({{ row[col].container.weight }})
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
                         {% endfor %}
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for row in buffer.grid %}
-                        <tr>
-                            {% for slot in row %}
-                                <td class="
-                                    {% if slot.container %}
-                                        container
-                                    {% elif slot.available %}
-                                        unused
-                                    {% else %}
-                                        nan
-                                    {% endif %}
-                                ">
-                                    {% if slot.container %}
-                                        {{ slot.container.name }} ({{ slot.container.weight }})
-                                    {% endif %}
-                                </td>
-                            {% endfor %}
-                        </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </div>
+
+            <!--Buffer Grid and Operations -->
+            <div class="section">
+                <h2>Buffer</h2>
+                <table id="buffer_grid">
+                    {#<thead>#}
+                        {#<tr>#}
+                            {#{% for col in range(buffer_cols) %}#}
+                            {#<th>{{ col + 1 }}</th>#}
+                            {#{% endfor %}#}
+                            {#</tr>#}
+                    {#</thead>#}
+                    <tbody>
+                        {% for row in buffer.grid %}
+                            <tr>
+                                {% for slot in row %}
+                                    <td class="
+                                        {% if slot.container %}
+                                            container
+                                        {% elif slot.available %}
+                                            unused
+                                        {% else %}
+                                            nan
+                                        {% endif %}
+                                    ">
+                                        {% if slot.container %}
+                                            {{ slot.container.name }} ({{ slot.container.weight }})
+                                        {% endif %}
+                                    </td>
+                                {% endfor %}
+                            </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
-    </div>
 
-    <div class="container-section">
-        <!-- Bottom Section: Operations -->
-        <div class="section">
-            <h2>Ship Operations</h2>
+        <div class="container-section">
+            <!-- Bottom Section: Operations -->
+            <div class="section">
+                <form id="loadForm" action="/load" method="POST">
+                    <h3>Load Container:</h3>
+                    <div class="form-group">
+                        <label for="load">Container Name:</label>
+                        <input type="text" name="load" id="load" placeholder="Enter container name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="row">Row:</label>
+                        <input type="number" name="row" id="row" placeholder="Enter row number" required min="1" max="{{ rows }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="col">Column:</label>
+                        <input type="number" name="col" id="col" placeholder="Enter column number" required min="1" max="{{ cols }}">
+                    </div>
+                    <div class="form-group">
+                        <label for="weight">Weight:</label>
+                        <input type="number" name="weight" id="weight" placeholder="Enter container weight" required min="1">
+                    </div>
+                    <button type="submit">Load</button>
+                </form>
 
-            <form id="balanceForm" action="/balance" method="POST">
-                <button type="submit">Balance Ship</button>
-            </form>
+                <form id="unloadForm" action="/unload" method="POST">
+                    <h3>Unload Container:</h3>
+                    <div class="form-group">
+                        <label for="container_name">Container Name:</label>
+                        <input type="text" name="container_name" id="container_name" placeholder="Enter container name" required>
+                    </div>
+                    <button type="submit" class="unload-button">Unload</button>
+                </form>
 
-            <form id="loadForm" action="/load" method="POST">
-                <h3>Load Container:</h3>
-                <div class="form-group">
-                    <label for="load">Container Name:</label>
-                    <input type="text" name="load" id="load" placeholder="Enter container name" required>
-                </div>
-                <div class="form-group">
-                    <label for="row">Row:</label>
-                    <input type="number" name="row" id="row" placeholder="Enter row number" required min="1" max="{{ rows }}">
-                </div>
-                <div class="form-group">
-                    <label for="col">Column:</label>
-                    <input type="number" name="col" id="col" placeholder="Enter column number" required min="1" max="{{ cols }}">
-                </div>
-                <div class="form-group">
-                    <label for="weight">Weight:</label>
-                    <input type="number" name="weight" id="weight" placeholder="Enter container weight" required min="1">
-                </div>
-                <button type="submit">Load</button>
-            </form>
-
-            <form id="unloadForm" action="/unload" method="POST">
-                <h3>Unload Container:</h3>
-                <div class="form-group">
-                    <label for="container_name">Container Name:</label>
-                    <input type="text" name="container_name" id="container_name" placeholder="Enter container name" required>
-                </div>
-                <button type="submit" class="unload-button">Unload</button>
-            </form>
-
-            <form id="departForm" action="/depart" method="POST">
-                <h3>Departure:</h3>
-                <button type="submit">Depart Ship</button>
-            </form>
-
-            {% if message %}
-                <div class="message">{{ message }}</div>
-            {% endif %}
+                {% if message %}
+                    <div class="message">{{ message }}</div>
+                {% endif %}
+            </div>
         </div>
     </div>
 
