@@ -1,11 +1,11 @@
 import os
 import re
-from flask import Flask, request, render_template, session
+from flask import Flask, request, render_template, session, send_file
 from werkzeug.utils import secure_filename
 
 # Initialize Flask application
 app = Flask(__name__)
-app.config['UPLOAD_FOLDER'] = 'uploads'
+app.config['UPLOAD_FOLDER'] = 'uploads/'
 app.config['OPERATION_LOG'] = 'operation_logs'
 app.config['BALANCE_LOG'] = os.path.join(app.config['OPERATION_LOG'], 'balance_logs')
 app.config['LOAD_LOG'] = os.path.join(app.config['OPERATION_LOG'], 'load_logs')
@@ -63,6 +63,34 @@ def create_ship_grid(rows, columns):
     """Creates an empty ship grid with specified number of rows and columns."""
     return [[Slot() for _ in range(columns)] for _ in range(rows)]
 
+def create_outbound_file(ship_grid, file_path):
+    outbound_file_path = f"{file_path}_OUTBOUND.txt"
+    
+    try:
+        with open(outbound_file_path, 'w') as outbound_file:
+            for i, row in enumerate(ship_grid):
+                for j, slot in enumerate(row):
+                    position = f"[{i+1:02},{j+1:02}]"  
+                    if slot.container:
+                        weight = f"{{{slot.container.weight:05}}}"  
+                        name = slot.container.name
+                    elif not slot.available:
+                        weight = "{00000}"
+                        name = "NAN"
+                    else:
+                        weight = "{00000}"
+                        name = "UNUSED"
+                    
+                    outbound_file.write(f"{position}, {weight}, {name}\n")
+        
+        print(f"Outbound file created: {outbound_file_path}")
+        return outbound_file_path
+
+    except Exception as e:
+        print(f"Error creating outbound file: {e}")
+        raise
+
+
 # load the ship grid
 def load_ship_grid(file_path, ship_grid):
     """Loads the ship grid from a manifest file, dynamically adjusting rows and columns."""
@@ -106,12 +134,14 @@ def load_ship_grid(file_path, ship_grid):
 # calculate the weight balance from middle to left and right
 def calculate_balance(ship_grid):
     """
-    Calculates the balance of the ship based on weight
+    Calculates the balance of the ship based on weight and moment.
     Returns:
         - Left weight, Right weight
+        - Left moment, Right moment
         - Whether the ship is balanced (according to maritime regulations)
     """
     left_weight, right_weight = 0, 0
+    left_moment, right_moment = 0, 0
     mid_col = len(ship_grid[0]) // 2  # Center line column index
 
     for row in ship_grid:
@@ -120,15 +150,18 @@ def calculate_balance(ship_grid):
                 weight = slot.container.weight
                 if col < mid_col:
                     left_weight += weight
+                    left_moment += weight * (mid_col - col)  # Distance from center line
                 else:
                     right_weight += weight
+                    right_moment += weight * (col - mid_col + 1)  # Distance from center line
 
-    weight_tolerance = 0.1 * max(left_weight, right_weight)  # 10% weight difference tolerance
+    total_weight = left_weight + right_weight
+    weight_tolerance = 0.1 * total_weight  # 10% weight difference tolerance
 
     # Check weight balance according to maritime regulations
     weight_balanced = abs(left_weight - right_weight) <= weight_tolerance
-    
-    return left_weight, right_weight, weight_balanced
+
+    return left_weight, right_weight, left_moment, right_moment, weight_balanced
 
 # calculate how many time moving the crane between buffer and ship grid
 def calculate_crane_time(from_pos, to_pos, ship_grid):
@@ -467,7 +500,7 @@ def balance_ship(ship_grid, buffer, log_file=None):
 
     return moves
 
-
+'''
 @app.route('/')
 def index():
     """Renders the main interface displaying the current ship and buffer grids."""
@@ -482,17 +515,107 @@ def index():
         buffer_rows=buffer_rows,
         buffer_cols=buffer_cols
     )
+'''
+
+@app.route('/')
+def login():
+    """Render the login page as the default page."""
+    session.clear()
+    return render_template('login.html')
 
 
-@app.route('/upload', methods=['POST'])
+@app.route('/demo', methods=['GET', 'POST'])
+def demo():
+    """Handles the Load/Unload button and renders demo.html."""
+    filename = session.get('uploaded_filename', None)
+    return render_template(
+        'demo.html',
+        uploaded_file=filename,
+        grid=ship_grid,
+        buffer=buffer,
+        rows=rows,
+        cols=cols,
+        buffer_rows=buffer_rows,
+        buffer_cols=buffer_cols
+    )
+
+@app.route('/demo2', methods=['GET', 'POST'])
+def demo2():
+    """Handles the Balance button and renders demo2.html."""
+    filename = session.get('uploaded_filename', None)
+    return render_template(
+        'demo2.html',
+        uploaded_file=filename,
+        grid=ship_grid,
+        buffer=buffer,
+        rows=rows,
+        cols=cols,
+        buffer_rows=buffer_rows,
+        buffer_cols=buffer_cols
+    )
+
+@app.route('/create_outbound', methods=['GET','POST'])
+def create_outbound():
+    """Generate and serve the outbound file to the user."""
+    filename = session.get('uploaded_filename', None)
+    uploaded_filename=filename
+    
+    if not uploaded_filename:
+        return "No filename provided.", 400
+
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
+    if not os.path.exists(file_path):
+        return "Uploaded file not found.", 404
+
+    outbound_file_path = create_outbound_file(ship_grid, file_path)  
+
+    return send_file(
+        outbound_file_path,
+        as_attachment=True,
+        download_name=os.path.basename(outbound_file_path),  
+        mimetype='text/plain'
+    )
+
+
+@app.route('/logout')
+def logout():
+    """Handles user logout by clearing the session and redirecting to login."""
+    session.clear()
+    return render_template(
+        'login.html',
+) 
+
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    """Handles login page"""
+    return render_template(
+        'login.html',
+)
+
+@app.route('/ship_options', methods=['GET', 'POST'])
+def ship_options():
+    """Handles operations page"""
+    filename = request.args.get('filename') 
+    if not filename:
+        filename = session.get('uploaded_filename')  
+    return render_template(
+        'ship_options.html',
+        uploaded_file=filename
+)
+
+
+@app.route('/upload', methods=['GET', 'POST'])
 def upload():
     """Handles file upload and loads the ship grid."""
+    global ship_grid, buffer, rows, cols
+    buffer = Buffer(buffer_rows, buffer_cols)  # Reset buffer
+    ship_grid = create_ship_grid(rows, cols)  # Reset ship grid
+
     file = request.files.get('file')
     if not file or not allowed_file(file.filename):
         return "Invalid file type. Please upload a .txt file.", 400
 
     filename = secure_filename(file.filename)
-    global file_path
     file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
     file.save(file_path)
 
@@ -500,18 +623,12 @@ def upload():
     # After stored in session, it can be brought to other page.
     session['uploaded_filename'] = filename
 
-    return redirect(url_for('ship_options.html'))
-
-@app.route('/load_unload', methods=['POST'])
-def load_unload():
-    global ship_grid, buffer, rows, cols
-    buffer = Buffer(buffer_rows, buffer_cols)  # Reset buffer
-    ship_grid = create_ship_grid(rows, cols)  # Reset ship grid
-
     try:
         rows, cols = load_ship_grid(file_path, ship_grid)  # Dynamically get rows and columns
         return render_template(
-            'demo.html',
+            'ship_options.html',
+            message= "File uploaded and ship grid loaded successfully!",
+            uploaded_file=filename,
             grid=ship_grid,
             buffer=buffer,
             rows=rows,
@@ -519,8 +636,10 @@ def load_unload():
             buffer_rows=buffer_rows,
             buffer_cols=buffer_cols
         )
+
     except Exception as e:
         return f"Error loading ship grid: {e}", 500
+
 
 @app.route('/balance', methods=['POST'])
 def balance_route():
@@ -536,9 +655,9 @@ def balance_route():
 
         with open(log_file_path, 'a') as log_file:
             moves = balance_ship(ship_grid, buffer, log_file)
-
+      
         return render_template(
-            'demo.html',
+            'demo2.html',
             grid=ship_grid,
             buffer=buffer,
             rows=rows,

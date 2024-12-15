@@ -372,6 +372,34 @@ def find_available_slot(ship_grid, col_range):
 def print_balance_status(left_weight, right_weight, is_balanced):
     print(f"Left Weight: {left_weight}, Right Weight: {right_weight}, Balanced: {is_balanced}")
 
+def create_outbound_file(ship_grid, file_path):
+    outbound_file_path = f"{file_path}_OUTBOUND.txt"
+    
+    try:
+        with open(outbound_file_path, 'w') as outbound_file:
+            for i, row in enumerate(ship_grid):
+                for j, slot in enumerate(row):
+                    position = f"[{i+1:02},{j+1:02}]"  
+                    if slot.container:
+                        weight = f"{{{slot.container.weight:05}}}"  
+                        name = slot.container.name
+                    elif not slot.available:
+                        weight = "{00000}"
+                        name = "NAN"
+                    else:
+                        weight = "{00000}"
+                        name = "UNUSED"
+                    
+                    outbound_file.write(f"{position}, {weight}, {name}\n")
+        
+        print(f"Outbound file created: {outbound_file_path}")
+        return outbound_file_path
+
+    except Exception as e:
+        print(f"Error creating outbound file: {e}")
+        raise
+
+
 
 if __name__ == "__main__":
     rows, cols = 8, 12
@@ -413,6 +441,36 @@ if __name__ == "__main__":
             print("Current Ship Grid:")
             print_ship_grid(ship_grid)
 
+            create_outbound_file(ship_grid, file_path)
+
             if input("Do you want to perform another operation? (y/n): ").lower() != "y":
                 print("Exiting the program.")
                 break
+
+def create_outbound_file(ship_grid, file_path):
+    outbound_file_path = f"{file_path}_OUTBOUND.txt"
+    
+    try:
+        with open(outbound_file_path, 'w') as outbound_file:
+            for i, row in enumerate(ship_grid):
+                for j, slot in enumerate(row):
+                    position = f"[{i+1:02},{j+1:02}]"  
+                    if slot.container:
+                        weight = f"{{{slot.container.weight:05}}}"  
+                        name = slot.container.name
+                    elif not slot.available:
+                        weight = "{00000}"
+                        anme = "NAN"
+                    else:
+                        weight = "{00000}"
+                        name = "UNUSED"
+                    
+                    outbound_file.write(f"{position}, {weight}, {name}\n")
+        
+        print(f"Outbound file created: {outbound_file_path}")
+        return outbound_file_path
+
+    except Exception as e:
+        print(f"Error creating outbound file: {e}")
+        raise
+
