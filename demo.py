@@ -1,6 +1,6 @@
 import os
 import re
-from flask import Flask, request, render_template, session
+from flask import Flask, request, render_template, session, send_file
 from werkzeug.utils import secure_filename
 
 # Initialize Flask application
@@ -76,7 +76,7 @@ def create_outbound_file(ship_grid, file_path):
                         name = slot.container.name
                     elif not slot.available:
                         weight = "{00000}"
-                        anme = "NAN"
+                        name = "NAN"
                     else:
                         weight = "{00000}"
                         name = "UNUSED"
@@ -520,14 +520,17 @@ def index():
 @app.route('/')
 def login():
     """Render the login page as the default page."""
+    session.clear()
     return render_template('login.html')
 
 
 @app.route('/demo', methods=['GET', 'POST'])
 def demo():
     """Handles the Load/Unload button and renders demo.html."""
+    filename = session.get('uploaded_filename', None)
     return render_template(
         'demo.html',
+        uploaded_file=filename,
         grid=ship_grid,
         buffer=buffer,
         rows=rows,
@@ -535,6 +538,44 @@ def demo():
         buffer_rows=buffer_rows,
         buffer_cols=buffer_cols
     )
+
+@app.route('/demo2', methods=['GET', 'POST'])
+def demo2():
+    """Handles the Balance button and renders demo2.html."""
+    filename = session.get('uploaded_filename', None)
+    return render_template(
+        'demo2.html',
+        uploaded_file=filename,
+        grid=ship_grid,
+        buffer=buffer,
+        rows=rows,
+        cols=cols,
+        buffer_rows=buffer_rows,
+        buffer_cols=buffer_cols
+    )
+
+@app.route('/create_outbound', methods=['GET','POST'])
+def create_outbound():
+    """Generate and serve the outbound file to the user."""
+    filename = session.get('uploaded_filename', None)
+    uploaded_filename=filename
+    
+    if not uploaded_filename:
+        return "No filename provided.", 400
+
+    file_path = os.path.join(app.config['UPLOAD_FOLDER'], uploaded_filename)
+    if not os.path.exists(file_path):
+        return "Uploaded file not found.", 404
+
+    outbound_file_path = create_outbound_file(ship_grid, file_path)  
+
+    return send_file(
+        outbound_file_path,
+        as_attachment=True,
+        download_name=os.path.basename(outbound_file_path),  
+        mimetype='text/plain'
+    )
+
 
 @app.route('/logout')
 def logout():
@@ -554,8 +595,12 @@ def login_page():
 @app.route('/ship_options', methods=['GET', 'POST'])
 def ship_options():
     """Handles operations page"""
+    filename = request.args.get('filename') 
+    if not filename:
+        filename = session.get('uploaded_filename')  
     return render_template(
         'ship_options.html',
+        uploaded_file=filename
 )
 
 
@@ -612,7 +657,7 @@ def balance_route():
             moves = balance_ship(ship_grid, buffer, log_file)
       
         return render_template(
-            'demo.html',
+            'demo2.html',
             grid=ship_grid,
             buffer=buffer,
             rows=rows,
