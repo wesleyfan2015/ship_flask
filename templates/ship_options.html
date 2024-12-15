@@ -48,7 +48,7 @@
     </style>
 </head>
 <body>
-    <a href="{{ url_for('logout')}}">Logout</a>
+    <a href="/logout">Logout</a>
     <div>
         <div style="display:flex; flex-direction:column;">
             <h3>Upload Manifest File</h3>
@@ -56,14 +56,25 @@
                 <input type="file" name="file" accept=".txt" required>
                 <button id="uploadBtn" type="submit">Upload</button>
             </form>
+            {% if uploaded_file %}
+            <p>Uploaded File: {{ uploaded_file }}</p> 
+            {% endif %}
+
+            {% if message %}
+            <p>{{ message }}</p> 
+            {% endif %}
+
+            {% if error %}
+            <p style="color: red;">{{ error }}</p> 
+            {% endif %}
         </div>
         <div>
             <h3>Ship Operations</h3>
             <div style="display:flex; flex-direction:row;">
-                <form action="/load_unload" method="POST" enctype="multipart/form-data">
+                <form action="/demo" method="POST" enctype="multipart/form-data">
                     <button type="submit">Load/Unload</button>
                 </form>
-                <form action="/balance" method="POST" enctype="multipart/form-data">
+                <form action="/demo" method="POST" enctype="multipart/form-data">
                     <button type="submit">Balance</button>
                 </form>
             </div>

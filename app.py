@@ -30,23 +30,30 @@ def allowed_file(filename):
 
 # web page submission file
 @app.route('/')
-def submission():
-    return render_template('submission.html')
-
-# baseline for ship problem logic
-@app.route('/loginPage')
-def loginPage():
+def login():
+    """Render the login page as the default page."""
     return render_template('login.html')
 
-@app.route('/login', methods=['POST'])
-def login():
-    username = request.form.get('username')
-    if username:
-        with open(f'KeoghsPort{datetime.now().year}.txt', 'a') as f:
-            f.write(f'{datetime.now().strftime("%Y-%m-%d %H:%M")}\t{username} logged in\n')
-        return redirect(url_for('ship_options'))
-    else:
-        return redirect(url_for('loginPage'))
+
+@app.route('/demo', methods=['GET', 'POST'])
+def demo():
+    """Handles the Load/Unload button and renders demo.html."""
+    return render_template(
+        'demo.html',
+        grid=ship_grid,
+        buffer=buffer,
+        rows=rows,
+        cols=cols,
+        buffer_rows=buffer_rows,
+        buffer_cols=buffer_cols
+    )
+
+@app.route('/login', methods=['GET', 'POST'])
+def login_page():
+    """Handles login page"""
+    return render_template(
+        'login.html',
+) 
 
 # load/unload and balance options (and logout button)
 @app.route('/ship_options')
@@ -82,12 +89,25 @@ def upload():
     # Store the uploaded filename in session
     session['uploaded_filename'] = filename  # Store the file name in session
 
-    try:
-        rows, cols = load_ship_grid(file_path, ship_grid)  # Get rows and cols dynamically
-        return render_template('index.html', grid=ship_grid, rows=rows, cols=cols)
-    except Exception as e:
-        return f"Error loading ship grid: {e}", 500
+    session['uploaded_filename'] = filename
 
+    try:
+        #  load the ship grid from the file path
+        rows, cols = load_ship_grid(file_path, ship_grid)  
+        return render_template(
+            'upload.html',
+            message="File uploaded and ship grid loaded successfully!",
+            uploaded_file=filename,  
+            grid=ship_grid,
+            buffer=buffer,
+            rows=rows,
+            cols=cols
+        )
+    except Exception as e:
+        return render_template(
+            'upload.html',
+            error=f"Error loading ship grid: {e}"
+        )
 
 @app.route('/balance', methods=['POST'])
 def balance():
