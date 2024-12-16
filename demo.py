@@ -52,10 +52,10 @@ class Buffer:
 
     def find_available_slot(self):
         """Finds the first available slot in the buffer starting from the bottom."""
-        for x in reversed(range(len(self.grid))):  # Start from the bottom
-            for y in range(len(self.grid[x])):
-                if self.grid[x][y].available:
-                    return (x, y)
+        for col in range(len(self.grid[0])):
+            for row in range(len(self.grid)):
+                if self.grid[row][col].container is None and self.grid[row][col].available:
+                    return (row, col)
         return None  # Buffer is full
 
 # create the ship grid
@@ -90,8 +90,6 @@ def create_outbound_file(ship_grid, file_path):
         print(f"Error creating outbound file: {e}")
         raise
 
-
-# load the ship grid
 def load_ship_grid(file_path, ship_grid):
     """Loads the ship grid from a manifest file, dynamically adjusting rows and columns."""
     max_row, max_col = 0, 0  # Track maximum row and column indices
@@ -137,11 +135,9 @@ def calculate_balance(ship_grid):
     Calculates the balance of the ship based on weight and moment.
     Returns:
         - Left weight, Right weight
-        - Left moment, Right moment
         - Whether the ship is balanced (according to maritime regulations)
     """
     left_weight, right_weight = 0, 0
-    left_moment, right_moment = 0, 0
     mid_col = len(ship_grid[0]) // 2  # Center line column index
 
     for row in ship_grid:
@@ -150,10 +146,8 @@ def calculate_balance(ship_grid):
                 weight = slot.container.weight
                 if col < mid_col:
                     left_weight += weight
-                    left_moment += weight * (mid_col - col)  # Distance from center line
                 else:
                     right_weight += weight
-                    right_moment += weight * (col - mid_col + 1)  # Distance from center line
 
     total_weight = left_weight + right_weight
     weight_tolerance = 0.1 * total_weight  # 10% weight difference tolerance
@@ -161,28 +155,27 @@ def calculate_balance(ship_grid):
     # Check weight balance according to maritime regulations
     weight_balanced = abs(left_weight - right_weight) <= weight_tolerance
 
-    return left_weight, right_weight, left_moment, right_moment, weight_balanced
+    return left_weight, right_weight, weight_balanced
 
 # calculate how many time moving the crane between buffer and ship grid
-def calculate_crane_time(from_pos, to_pos, ship_grid):
-    """Calculates the crane time required to move a container from buffer to ship."""
-    x1, y1 = from_pos  # Starting position
-    x2, y2 = to_pos  # Target position
+# def calculate_crane_time(from_pos, to_pos, ship_grid):
+#     """Calculates the crane time required to move a container from buffer to ship."""
+#     x1, y1 = from_pos  # Starting position
+#     x2, y2 = to_pos  # Target position
 
-    # Time for crane to move to container position (1 minute per slot)
-    crane_to_container_time = 1 * y1
+#     # Time for crane to move to container position (1 minute per slot)
+#     crane_to_container_time = 1 * y1
 
-    # Time to move the container (assuming same row, 1 minute per slot)
-    move_container_time = 1 * abs(y1 - y2)
+#     # Time to move the container (assuming same row, 1 minute per slot)
+#     move_container_time = 1 * abs(y1 - y2)
 
-    # Time for crane to return to buffer
-    crane_return_time = 1 * y2
+#     # Time for crane to return to buffer
+#     crane_return_time = 1 * y2
 
-    total_time = crane_to_container_time + move_container_time + crane_return_time
-    return crane_to_container_time, move_container_time, crane_return_time, total_time
+#     total_time = crane_to_container_time + move_container_time + crane_return_time
+#     return crane_to_container_time, move_container_time, crane_return_time, total_time
 
-# verify the buffer integrity
-def verify_buffer_integrity(buffer, ship_grid, log_file=None):
+def verify_buffer_integrity(buffer, ship_grid):
     """
     Ensures that all containers in the buffer that do not need to be unloaded are loaded back onto the ship.
     """
@@ -192,17 +185,15 @@ def verify_buffer_integrity(buffer, ship_grid, log_file=None):
             if slot.container:
                 container = slot.container
                 if not container.unload:
-                    # Find available slot in the ship (right half)
-                    available = find_available_slot(ship_grid, range(len(ship_grid[0]) // 2, len(ship_grid[0])))
+                    # Find available slot in the ship
+                    available = find_available_slot(ship_grid, range(len(ship_grid[0]), len(ship_grid[0])))
                     if available:
                         ship_x, ship_y = available
                         ship_grid[ship_x][ship_y].container = container
                         ship_grid[ship_x][ship_y].available = False
 
-                        log_message = f"Moved {container.name} from Buffer[{x + 1}, {y + 1}] to Ship[{ship_x + 1}, {ship_y + 1}].\n"
-                        messages.append(log_message)
-                        if log_file:
-                            log_file.write(log_message)
+                        message = f"Move {container.name} from Buffer[{x + 1}, {y + 1}] to Ship[{ship_x + 1}, {ship_y + 1}].\n"
+                        messages.append(message)
 
                         # Clear the buffer slot
                         slot.container = None
@@ -210,8 +201,6 @@ def verify_buffer_integrity(buffer, ship_grid, log_file=None):
                     else:
                         message = f"Cannot return container {container.name} to the ship. Ship is full."
                         messages.append(message)
-                        if log_file:
-                            log_file.write(message + "\n")
                         continue
     return messages
 
@@ -436,7 +425,7 @@ def balance_ship(ship_grid, buffer, log_file=None):
                     log_file.write(f"Container '{container.name}' marked for unloading. Skipping.\n")
                 continue
 
-            # Estimate crane time
+            # Estimate crane time                                                         # change time calc
             crane_to_container_time, move_container_time, crane_return_time, total_time = calculate_crane_time(
                 from_pos, available_slot, ship_grid)
 
@@ -871,6 +860,221 @@ rows, cols = 8,12  # Ship grid size (rows x columns)
 buffer_rows, buffer_cols = 4, 24  # Buffer grid size (rows x columns)
 ship_grid = create_ship_grid(rows, cols)
 buffer = Buffer(buffer_rows, buffer_cols)
+
+# A* stuff
+class Node():
+    def __init__(self):
+        self.ship_grid = None
+        self.buffer = None
+        self.timeCost = 0
+        self.unloadHeuristic = self.unloadHeuristic()
+        self.balanceHeuristic = self.balanceHeuristic()
+        self.parent = None
+        self.operator = ''
+
+ # enables checks for duplicate nodes to optimize search algorithm using == and 'in' keyword
+def __eq__(self, object):
+    return isinstance(object, Node) and (self.ship_grid == object.ship_grid) and (self.buffer == object.buffer)
+
+# number of containers left to unload
+def unloadHeuristic(ship_grid):
+    heuristic = 0
+    for row in ship_grid:
+        for slot in row:
+            if slot.container and slot.container.unload:
+                heuristic += 1
+            
+    return heuristic
+
+def balanceHeuristic(self, ship_grid):
+    left_weight, right_weight, weight_balanced = calculate_balance(ship_grid)
+    
+    return abs(left_weight - right_weight)
+
+# within buffer/ship, 1 min per slot
+# between buffer and ship, 4 min
+# between truck and buffer/ship, 2 min
+def unload_expandNode(self):
+    frontier = []
+    for j in range(len(self.ship_grid[0])):
+        # search column from top to bottom
+        for i in reversed(range(len(self.ship_grid))):
+            # if container exists and nothing is on top of it (top row edge index out of range edge case), apply operators to it
+            if (self.ship_grid[i][j].container and i == 7) or (self.ship_grid[i][j].container and self.ship_grid[i+1][j].available):
+                # prioritize unloading operator
+                if self.ship_grid[i][j].container.unload:
+                    currNode = Node()
+                    currNode.ship_grid = self.ship_grid.copy()
+                    currNode.ship_grid[i][j].container = None
+                    currNode.ship_grid[i][j].available = True
+                    currNode.buffer = self.buffer.copy()
+                    # time to get to top corner + 1 to get out of ship, + 2 to loading area
+                    currNode.timeCost = (7 - i) + j + 1 + 2
+                    currNode.unloadHeuristic = currNode.ship_grid.unloadHeuristic()
+                    currNode.balanceHeuristic = currNode.ship_grid.balanceHeuristic()
+                    currNode.parent = self
+                    currNode.operator = f'Unload {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to loading area'
+                    frontier.append(currNode)
+                    break
+                for col in range(len(self.ship_grid[0])):
+                    # skip current column, not moving a container to its current position
+                    if col != j:
+                        row = find_slot_in_col(self, col)
+                        # if column is not full
+                        if row is not None:
+                            currNode = Node()
+                            currNode.ship_grid = self.ship_grid.copy()
+
+                            # move container to new position
+                            currNode.ship_grid[row][col] = Container()
+                            currNode.ship_grid[row][col].container.name = self.ship_grid[i][j].container.name
+                            currNode.ship_grid[row][col].container.weight = self.ship_grid[i][j].container.weight
+                            currNode.ship_grid[row][col].container.unload = self.ship_grid[i][j].container.unload
+                            currNode.ship_grid[row][col].available = False
+                            currNode.ship_grid[i][j].container = None
+                            currNode.ship_grid[i][j].available = True
+
+                            # update costs and track operation
+                            currNode.buffer = self.buffer.copy()
+                            currNode.timeCost = abs(i - row) + abs(j - col)
+                            currNode.unloadHeuristic = currNode.ship_grid.unloadHeuristic()
+                            currNode.balanceHeuristic = currNode.ship_grid.balanceHeuristic()
+                            currNode.parent = self
+                            currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Ship[{row+1}, {col+1}]'
+                        frontier.append(currNode)
+
+                # move to buffer operator
+                currNode = Node()
+                currNode.buffer = self.buffer.copy()
+                buffer_row, buffer_col = self.buffer.find_available_slot()
+                # move container to new position in buffer
+                currNode.buffer[buffer_row][buffer_col] = Container()
+                currNode.buffer[buffer_row][buffer_col].container.name = self.ship_grid[i][j].container.name
+                currNode.buffer[buffer_row][buffer_col].container.weight = self.ship_grid[i][j].container.weight
+                currNode.buffer[buffer_row][buffer_col].container.unload = self.ship_grid[i][j].container.unload
+                currNode.buffer[buffer_row][buffer_col].available = False
+                currNode.ship_grid[i][j].container = None
+                currNode.ship_grid[i][j].available = True
+
+                # update costs and track operation
+                currNode.ship_grid = self.ship_grid.copy()
+                # time to get to top left corner + 1 to get out of ship, + 4 to buffer, + 1 to get in buffer + time to buffer slot
+                currNode.timeCost = abs(i - row) + abs(j - col) + 1 + 4 + 1 + (3 - buffer_row) + buffer_col
+                currNode.unloadHeuristic = currNode.ship_grid.unloadHeuristic()
+                currNode.balanceHeuristic = currNode.ship_grid.balanceHeuristic()
+                currNode.parent = self
+                currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Buffer[{buffer_x+1}, {buffer_y+1}]'
+                frontier.append(currNode)
+                # don't iterate rest of column when found container to apply operators
+                break
+
+    return frontier
+
+def find_slot_in_col(self, col):
+    for row in range(len(self.ship_grid)):
+        if self.ship_grid[row][col].available:
+            return row
+
+    # column is full
+    return None
+
+def balance_expandNode(self):
+    frontier = []
+    
+    return frontier
+
+def unload_astar(ship_grid, buffer, unload_lst):
+    operations = []
+
+    initial_node = Node()
+    initial_node.ship_grid = ship_grid.copy()
+    initial_node.buffer = buffer.copy()
+    currNode = None 
+    queue = [initial_node]
+    expandedNodes = []
+    while len(queue) > 0:
+        currNode = queue[0]
+        if currNode.unload_goal(currNode.ship_grid, unload_lst) == True:
+
+            # operations [msg, cost] from currNode parent
+            while currNode.parent is not None:
+                operations.append([currNode.operator, currNode.timeCost])
+                currNode = currNode.parent
+
+            # add loading anything from buffer back to ship
+            buffer_operations = clear_buffer(currNode.ship_grid, currNode.buffer)
+            operations.extend(buffer_operations)
+
+            return reversed(operations)
+        
+        newNodes = currNode.unload_expandNode()
+        expandedNodes.append(queue.pop(0))
+        # checks if expanded node has already been searched
+        for node in newNodes:
+            if node in expandedNodes:
+                continue
+            # some edge cases inserting into queue sorted by g(n) + h(n)
+            if len(queue) == 0:
+                queue.append(node)
+                continue
+            for i in range(-1, -len(queue), -1):
+                if (node.timeCost + node.unloadHeuristic) > (queue[i].timeCost + queue[i].unloadHeuristic):
+                    if i == -1:
+                        queue.append(node)
+                        break
+                    queue.insert(i + 1, node)
+                    break
+            if i == -len(queue):
+                queue.insert(0, node)
+            
+    # this really shouldn't ever return but just in case for debugging
+    return ['No goal found']
+
+# first unload, then load operations are straightforward
+def unload_goal(ship_grid, unload_lst):
+    for row in ship_grid:
+        for slot in row:
+            if slot.container and slot.container.name in unload_lst:
+                return False
+            
+    return True
+
+def clear_buffer(ship_grid, buffer):
+    operations = []
+
+    for col in range(len(buffer[0])):
+        for row in reversed(range(len(buffer))):
+            if buffer[row][col].container:
+                ship_row, ship_col = find_ship_slot(ship_grid)
+                ship_grid[ship_row][ship_col].available = False
+                message = f'Move Buffer[{row+1}, {col+1}] to Ship[{ship_row+1}, {ship_col+1}]'
+                # time to get to top corner + 1 to get out of buffer, + 4 to ship, + 1 to get in ship, + time to ship slot
+                cost = (3 - row) + col + 1 + 4 + 1 + (7 - ship_row) + ship_col
+                operations.append([message, cost])
+
+    return operations
+
+def find_ship_slot(ship_grid):
+    for col in range(len(ship_grid[0])):
+        for row in range(len(ship_grid)):
+            if (ship_grid[row][col].container is None) and (ship_grid[row][col].available):
+                return row, col
+            
+    # shouldn't return None but just in case for debugging
+    return None
+
+# return sequence of operations saved in a list
+def balance_astar(ship_grid, buffer):
+    operations = []
+    
+    # if frontier is empty, SIFT
+
+    return operations
+
+def balance_goal(ship_grid):
+    left_weight, right_weight, weight_balanced = calculate_balance(ship_grid)
+
+    return weight_balanced
 
 if __name__ == '__main__':
     app.run(debug=True)
