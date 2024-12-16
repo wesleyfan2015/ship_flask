@@ -133,6 +133,10 @@
             vertical-align: middle;
             cursor: pointer;
             }
+        #ship_grid td.selected {
+            background-color: #cbf3ff;
+            cursor: pointer;
+        }
         #ship_grid {
             width: 50%;
             border-collapse: collapse;
@@ -161,8 +165,8 @@
     <a href="/ship_options?filename={{ uploaded_file }}">Back</a>
     <h1>Load/Unload</h1>
 
-    <form id="nextForm" style="text-align:center;" action="/next" method="POST">
-        <h3>Next Operation:</h3>
+    <form id="nextForm" style="text-align:center;" action="/nextBtn" method="POST">
+        <h3>Next Operation: {{ next_operation }}</h3>
         <button type="submit">Next</button>
     </form>
 
@@ -190,7 +194,9 @@
                                         {% else %}
                                             nan
                                         {% endif %}
-                                    ">
+                                    " data-container-name="{{ row[col].container.name if row[col].container }}" 
+                                      data-row="{{ loop.index0 }}" 
+                                      data-col="{{ loop.index0 }}">
                                         {% if row[col].container %}
                                             {{ row[col].container.name }} ({{ row[col].container.weight }})
                                         {% endif %}
@@ -262,13 +268,9 @@
                     <button type="submit">Load</button>
                 </form>
 
-                <form id="unloadForm" action="/unload" method="POST">
-                    <h3>Unload Container:</h3>
-                    <div class="form-group">
-                        <label for="container_name">Container Name:</label>
-                        <input type="text" name="container_name" id="container_name" placeholder="Enter container name" required>
-                    </div>
-                    <button type="submit" class="unload-button">Unload</button>
+                <form id="unloadForm" action="/unload_containers" method="POST">
+                    <input type="hidden" id="selectedContainers" name="containers">
+                    <button type="submit" id="unloadBtn" class="unload-button">Unload</button>
                 </form>
 
                 {% if message %}
@@ -279,7 +281,23 @@
     </div>
 
     <script>
-        // Optional: Add JavaScript for enhanced interactivity if needed
+        const selectedContainers = [];
+
+        document.getElementById('ship_grid').addEventListener('click', (event) => {
+        const cell = event.target;
+        const containerName = cell.dataset.containerName;
+
+        if (containerName) { 
+            if (selectedContainers.includes(containerName)) {
+                selectedContainers.splice(selectedContainers.indexOf(containerName), 1);
+                cell.style.backgroundColor = '';
+            } else {
+                selectedContainers.push(containerName);
+                cell.style.backgroundColor = 'lightblue';
+            }
+            document.getElementById('selectedContainers').value = selectedContainers.join(',');
+        }
+    });
     </script>
 </body>
 </html>

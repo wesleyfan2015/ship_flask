@@ -255,7 +255,7 @@ def move_container(from_pos, to_pos, ship_grid):
     ship_grid[from_x][from_y].container = None
     ship_grid[from_x][from_y].available = True
 
-# load container into ship gird, if the ship gird is 50% full, move the container to the buffer
+# load container into ship grid, if the ship grid is 50% full, move the container to the buffer
 def load_container_with_log(container, target_pos, ship_grid, buffer, log_file):
     """
     Loads a container into the specified position on the ship, or moves it to the buffer based on capacity.
@@ -698,6 +698,30 @@ def load_route():
     except Exception as e:
         return f"Error loading ship grid: {e}", 500
 
+@app.route('/unload_containers', methods=['POST'])
+def unload_containers():
+    try:
+        selected_containers = request.form.get('containers', '').split(',')
+
+        if not selected_containers:
+            return "No containers selected.", 400
+
+        operations = unload_astar(ship_grid, buffer, selected_containers)
+        session['operations'] = operations
+        session['current_index'] = 0
+
+        return render_template(
+            'demo.html',
+            grid=ship_grid,
+            buffer=buffer,
+            rows=rows,
+            cols=cols,
+            buffer_rows=buffer_rows,
+            buffer_cols=buffer_cols,
+            operations=operations
+        )
+    except Exception as e:
+        return f"Failed to unload containers: {str(e)}", 500
 
 @app.route('/unload', methods=['POST'])
 def unload_route():
@@ -772,7 +796,32 @@ def unload_route():
 #         )
 #     except Exception as e:
 #         return f"Error during departure: {e}", 500
+@app.route('/nextBtn', methods=['POST'])
+def next_operation():
+    try:
+        # Assume 'operations' is stored in session or calculated earlier
+        operations = session.get('operations', [])
+        current_index = session.get('current_index', 0)
 
+        if current_index < len(operations):
+            next_operation = operations[current_index] + "\n" + 'Time to complete: ' + str(operations[current_index][1])
+            session['current_index'] = current_index + 1  # Move to the next operation
+        else:
+            next_operation = "All operations completed."  # Handle end of operations
+
+        return render_template(
+            'demo.html',
+            grid=ship_grid,
+            buffer=buffer,
+            rows=rows,
+            cols=cols,
+            buffer_rows=buffer_rows,
+            buffer_cols=buffer_cols,
+            operations=operations,
+            next_operation=next_operation
+        )
+    except Exception as e:
+        return str(e), 500
 
 @app.route('/next', methods=['POST'])
 def next_route():
@@ -867,8 +916,8 @@ class Node():
         self.ship_grid = None
         self.buffer = None
         self.timeCost = 0
-        self.unloadHeuristic = self.unloadHeuristic()
-        self.balanceHeuristic = self.balanceHeuristic()
+        self.unloadHeuristic = 0
+        self.balanceHeuristic = 0
         self.parent = None
         self.operator = ''
 
@@ -910,8 +959,8 @@ def unload_expandNode(self):
                     currNode.buffer = self.buffer.copy()
                     # time to get to top corner + 1 to get out of ship, + 2 to loading area
                     currNode.timeCost = (7 - i) + j + 1 + 2
-                    currNode.unloadHeuristic = currNode.ship_grid.unloadHeuristic()
-                    currNode.balanceHeuristic = currNode.ship_grid.balanceHeuristic()
+                    currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
+                    currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
                     currNode.parent = self
                     currNode.operator = f'Unload {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to loading area'
                     frontier.append(currNode)
@@ -937,8 +986,8 @@ def unload_expandNode(self):
                             # update costs and track operation
                             currNode.buffer = self.buffer.copy()
                             currNode.timeCost = abs(i - row) + abs(j - col)
-                            currNode.unloadHeuristic = currNode.ship_grid.unloadHeuristic()
-                            currNode.balanceHeuristic = currNode.ship_grid.balanceHeuristic()
+                            currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
+                            currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
                             currNode.parent = self
                             currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Ship[{row+1}, {col+1}]'
                         frontier.append(currNode)
@@ -960,10 +1009,10 @@ def unload_expandNode(self):
                 currNode.ship_grid = self.ship_grid.copy()
                 # time to get to top left corner + 1 to get out of ship, + 4 to buffer, + 1 to get in buffer + time to buffer slot
                 currNode.timeCost = abs(i - row) + abs(j - col) + 1 + 4 + 1 + (3 - buffer_row) + buffer_col
-                currNode.unloadHeuristic = currNode.ship_grid.unloadHeuristic()
-                currNode.balanceHeuristic = currNode.ship_grid.balanceHeuristic()
+                currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
+                currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
                 currNode.parent = self
-                currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Buffer[{buffer_x+1}, {buffer_y+1}]'
+                currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Buffer[{buffer_row+1}, {buffer_col+1}]'
                 frontier.append(currNode)
                 # don't iterate rest of column when found container to apply operators
                 break
