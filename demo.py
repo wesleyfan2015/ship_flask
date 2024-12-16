@@ -510,7 +510,7 @@ def index():
 def login():
     """Render the login page as the default page."""
     session.clear()
-    return render_template('login.html')
+    return render_template('submission.html')
 
 
 @app.route('/demo', methods=['GET', 'POST'])
