@@ -914,7 +914,7 @@ buffer = Buffer(buffer_rows, buffer_cols)
 class Node():
     def __init__(self):
         self.ship_grid = None
-        self.buffer = None
+        self.buffer_grid = None
         self.timeCost = 0
         self.unloadHeuristic = 0
         self.balanceHeuristic = 0
@@ -937,11 +937,11 @@ class Node():
                         currNode.ship_grid = self.ship_grid.copy()
                         currNode.ship_grid[i][j].container = None
                         currNode.ship_grid[i][j].available = True
-                        currNode.buffer.grid = self.buffer.grid.copy()
+                        currNode.buffer_grid = self.buffer_grid.copy()
                         # time to get to top corner + 1 to get out of ship, + 2 to loading area
                         currNode.timeCost = (7 - i) + j + 1 + 2
                         currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
-                        currNode.balanceHeuristic = balanceHeuristic(currNode.buffer.grid)
+                        currNode.balanceHeuristic = balanceHeuristic(currNode.buffer_grid)
                         currNode.parent = self
                         currNode.operator = f'Unload {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to loading area'
                         frontier.append(currNode)
@@ -963,22 +963,22 @@ class Node():
                                 currNode.ship_grid[i][j].available = True
 
                                 # update costs and track operation
-                                currNode.buffer.grid = self.buffer.grid.copy()
+                                currNode.buffer_grid = self.buffer_grid.copy()
                                 currNode.timeCost = abs(i - row) + abs(j - col)
                                 currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
-                                currNode.balanceHeuristic = balanceHeuristic(currNode.buffer.grid)
+                                currNode.balanceHeuristic = balanceHeuristic(currNode.buffer_grid)
                                 currNode.parent = self
                                 currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Ship[{row+1}, {col+1}]'
                             frontier.append(currNode)
 
                     # move to buffer operator
                     currNode = Node()
-                    currNode.buffer.grid = self.buffer.grid.copy()
+                    currNode.buffer_grid = self.buffer_grid.copy()
                     buffer_row, buffer_col = self.buffer.find_available_slot()
                     # move container to new position in buffer
-                    currNode.buffer.grid[buffer_row][buffer_col] = Container(self.ship_grid[i][j].container.name, self.ship_grid[i][j].container.weight)
-                    currNode.buffer.grid[buffer_row][buffer_col].container.unload = self.ship_grid[i][j].container.unload
-                    currNode.buffer.grid[buffer_row][buffer_col].available = False
+                    currNode.buffer_grid[buffer_row][buffer_col] = Container(self.ship_grid[i][j].container.name, self.ship_grid[i][j].container.weight)
+                    currNode.buffer_grid[buffer_row][buffer_col].container.unload = self.ship_grid[i][j].container.unload
+                    currNode.buffer_grid[buffer_row][buffer_col].available = False
                     currNode.ship_grid[i][j].container = None
                     currNode.ship_grid[i][j].available = True
 
@@ -987,7 +987,7 @@ class Node():
                     # time to get to top left corner + 1 to get out of ship, + 4 to buffer, + 1 to get in buffer + time to buffer slot
                     currNode.timeCost = abs(i - row) + abs(j - col) + 1 + 4 + 1 + (3 - buffer_row) + buffer_col
                     currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
-                    currNode.balanceHeuristic = balanceHeuristic(currNode.buffer.grid)
+                    currNode.balanceHeuristic = balanceHeuristic(currNode.buffer_grid)
                     currNode.parent = self
                     currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Buffer[{buffer_row+1}, {buffer_col+1}]'
                     frontier.append(currNode)
@@ -1015,7 +1015,7 @@ def unloadHeuristic(ship_grid):
             
     return heuristic
 
-def balanceHeuristic(self, ship_grid):
+def balanceHeuristic(ship_grid):
     left_weight, right_weight, weight_balanced = calculate_balance(ship_grid)
     
     return abs(left_weight - right_weight)
@@ -1034,12 +1034,13 @@ def balance_expandNode(self):
     
     return frontier
 
+# unload makes buffer to buffer grid conversion
 def unload_astar(ship_grid, buffer, unload_lst):
     operations = []
 
     initial_node = Node()
     initial_node.ship_grid = ship_grid.copy()
-    initial_node.buffer = buffer.grid.copy()
+    initial_node.buffer_grid = buffer.grid.copy()
     currNode = None 
     queue = [initial_node]
     expandedNodes = []
@@ -1053,7 +1054,7 @@ def unload_astar(ship_grid, buffer, unload_lst):
                 currNode = currNode.parent
 
             # add loading anything from buffer back to ship
-            buffer_operations = clear_buffer(currNode.ship_grid, currNode.buffer.grid)
+            buffer_operations = clear_buffer(currNode.ship_grid, currNode.buffer_grid)
             operations.extend(buffer_operations)
 
             return reversed(operations)
