@@ -702,18 +702,19 @@ def load_route():
 def unload_containers():
     try:
         selected_containers = request.form.get('containers', '').split(',')
-
+        print(selected_containers)
+        
         if not selected_containers:
             return "No containers selected.", 400
 
-        operations = unload_astar(ship_grid, buffer, selected_containers)
+        operations = unload_astar(ship_grid, buffer.grid, selected_containers)
         session['operations'] = operations
         session['current_index'] = 0
 
         return render_template(
             'demo.html',
             grid=ship_grid,
-            buffer=buffer,
+            buffer=buffer.grid,
             rows=rows,
             cols=cols,
             buffer_rows=buffer_rows,
@@ -805,9 +806,9 @@ def next_operation():
 
         if current_index < len(operations):
             next_operation = operations[current_index] + "\n" + 'Time to complete: ' + str(operations[current_index][1])
-            session['current_index'] = current_index + 1  # Move to the next operation
+            session['current_index'] = current_index + 1
         else:
-            next_operation = "All operations completed."  # Handle end of operations
+            next_operation = "All operations completed." 
 
         return render_template(
             'demo.html',
@@ -921,6 +922,90 @@ class Node():
         self.parent = None
         self.operator = ''
 
+        # within buffer/ship, 1 min per slot
+        # between buffer and ship, 4 min
+        # between truck and buffer/ship, 2 min
+        def unload_expandNode(self):
+            frontier = []
+            for j in range(len(self.ship_grid[0])):
+                # search column from top to bottom
+                for i in reversed(range(len(self.ship_grid))):
+                    # if container exists and nothing is on top of it (top row edge index out of range edge case), apply operators to it
+                    if (self.ship_grid[i][j].container and i == 7) or (self.ship_grid[i][j].container and self.ship_grid[i+1][j].available):
+                        # prioritize unloading operator
+                        if self.ship_grid[i][j].container.unload:
+                            currNode = Node()
+                            currNode.ship_grid = self.ship_grid.copy()
+                            currNode.ship_grid[i][j].container = None
+                            currNode.ship_grid[i][j].available = True
+                            currNode.buffer = self.buffer.grid.copy()
+                            # time to get to top corner + 1 to get out of ship, + 2 to loading area
+                            currNode.timeCost = (7 - i) + j + 1 + 2
+                            currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
+                            currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
+                            currNode.parent = self
+                            currNode.operator = f'Unload {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to loading area'
+                            frontier.append(currNode)
+                            break
+                        for col in range(len(self.ship_grid[0])):
+                            # skip current column, not moving a container to its current position
+                            if col != j:
+                                row = find_slot_in_col(self, col)
+                                # if column is not full
+                                if row is not None:
+                                    currNode = Node()
+                                    currNode.ship_grid = self.ship_grid.copy()
+
+                                    # move container to new position
+                                    currNode.ship_grid[row][col] = Container()
+                                    currNode.ship_grid[row][col].container.name = self.ship_grid[i][j].container.name
+                                    currNode.ship_grid[row][col].container.weight = self.ship_grid[i][j].container.weight
+                                    currNode.ship_grid[row][col].container.unload = self.ship_grid[i][j].container.unload
+                                    currNode.ship_grid[row][col].available = False
+                                    currNode.ship_grid[i][j].container = None
+                                    currNode.ship_grid[i][j].available = True
+
+                                    # update costs and track operation
+                                    currNode.buffer = self.buffer.grid.copy()
+                                    currNode.timeCost = abs(i - row) + abs(j - col)
+                                    currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
+                                    currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
+                                    currNode.parent = self
+                                    currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Ship[{row+1}, {col+1}]'
+                                frontier.append(currNode)
+
+                        # move to buffer operator
+                        currNode = Node()
+                        currNode.buffer = self.buffer.grid.copy()
+                        buffer_row, buffer_col = self.buffer.find_available_slot()
+                        # move container to new position in buffer
+                        currNode.buffer[buffer_row][buffer_col] = Container()
+                        currNode.buffer[buffer_row][buffer_col].container.name = self.ship_grid[i][j].container.name
+                        currNode.buffer[buffer_row][buffer_col].container.weight = self.ship_grid[i][j].container.weight
+                        currNode.buffer[buffer_row][buffer_col].container.unload = self.ship_grid[i][j].container.unload
+                        currNode.buffer[buffer_row][buffer_col].available = False
+                        currNode.ship_grid[i][j].container = None
+                        currNode.ship_grid[i][j].available = True
+
+                        # update costs and track operation
+                        currNode.ship_grid = self.ship_grid.copy()
+                        # time to get to top left corner + 1 to get out of ship, + 4 to buffer, + 1 to get in buffer + time to buffer slot
+                        currNode.timeCost = abs(i - row) + abs(j - col) + 1 + 4 + 1 + (3 - buffer_row) + buffer_col
+                        currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
+                        currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
+                        currNode.parent = self
+                        currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Buffer[{buffer_row+1}, {buffer_col+1}]'
+                        frontier.append(currNode)
+                        # don't iterate rest of column when found container to apply operators
+                        break
+
+            return frontier
+        
+        def balance_expandNode(self):
+            frontier = []
+            
+            return frontier
+
  # enables checks for duplicate nodes to optimize search algorithm using == and 'in' keyword
 def __eq__(self, object):
     return isinstance(object, Node) and (self.ship_grid == object.ship_grid) and (self.buffer == object.buffer)
@@ -940,84 +1025,6 @@ def balanceHeuristic(self, ship_grid):
     
     return abs(left_weight - right_weight)
 
-# within buffer/ship, 1 min per slot
-# between buffer and ship, 4 min
-# between truck and buffer/ship, 2 min
-def unload_expandNode(self):
-    frontier = []
-    for j in range(len(self.ship_grid[0])):
-        # search column from top to bottom
-        for i in reversed(range(len(self.ship_grid))):
-            # if container exists and nothing is on top of it (top row edge index out of range edge case), apply operators to it
-            if (self.ship_grid[i][j].container and i == 7) or (self.ship_grid[i][j].container and self.ship_grid[i+1][j].available):
-                # prioritize unloading operator
-                if self.ship_grid[i][j].container.unload:
-                    currNode = Node()
-                    currNode.ship_grid = self.ship_grid.copy()
-                    currNode.ship_grid[i][j].container = None
-                    currNode.ship_grid[i][j].available = True
-                    currNode.buffer = self.buffer.copy()
-                    # time to get to top corner + 1 to get out of ship, + 2 to loading area
-                    currNode.timeCost = (7 - i) + j + 1 + 2
-                    currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
-                    currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
-                    currNode.parent = self
-                    currNode.operator = f'Unload {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to loading area'
-                    frontier.append(currNode)
-                    break
-                for col in range(len(self.ship_grid[0])):
-                    # skip current column, not moving a container to its current position
-                    if col != j:
-                        row = find_slot_in_col(self, col)
-                        # if column is not full
-                        if row is not None:
-                            currNode = Node()
-                            currNode.ship_grid = self.ship_grid.copy()
-
-                            # move container to new position
-                            currNode.ship_grid[row][col] = Container()
-                            currNode.ship_grid[row][col].container.name = self.ship_grid[i][j].container.name
-                            currNode.ship_grid[row][col].container.weight = self.ship_grid[i][j].container.weight
-                            currNode.ship_grid[row][col].container.unload = self.ship_grid[i][j].container.unload
-                            currNode.ship_grid[row][col].available = False
-                            currNode.ship_grid[i][j].container = None
-                            currNode.ship_grid[i][j].available = True
-
-                            # update costs and track operation
-                            currNode.buffer = self.buffer.copy()
-                            currNode.timeCost = abs(i - row) + abs(j - col)
-                            currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
-                            currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
-                            currNode.parent = self
-                            currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Ship[{row+1}, {col+1}]'
-                        frontier.append(currNode)
-
-                # move to buffer operator
-                currNode = Node()
-                currNode.buffer = self.buffer.copy()
-                buffer_row, buffer_col = self.buffer.find_available_slot()
-                # move container to new position in buffer
-                currNode.buffer[buffer_row][buffer_col] = Container()
-                currNode.buffer[buffer_row][buffer_col].container.name = self.ship_grid[i][j].container.name
-                currNode.buffer[buffer_row][buffer_col].container.weight = self.ship_grid[i][j].container.weight
-                currNode.buffer[buffer_row][buffer_col].container.unload = self.ship_grid[i][j].container.unload
-                currNode.buffer[buffer_row][buffer_col].available = False
-                currNode.ship_grid[i][j].container = None
-                currNode.ship_grid[i][j].available = True
-
-                # update costs and track operation
-                currNode.ship_grid = self.ship_grid.copy()
-                # time to get to top left corner + 1 to get out of ship, + 4 to buffer, + 1 to get in buffer + time to buffer slot
-                currNode.timeCost = abs(i - row) + abs(j - col) + 1 + 4 + 1 + (3 - buffer_row) + buffer_col
-                currNode.unloadHeuristic = unloadHeuristic(currNode.ship_grid)
-                currNode.balanceHeuristic = balanceHeuristic(currNode.buffer)
-                currNode.parent = self
-                currNode.operator = f'Move {currNode.ship_grid[i][j].container.name} from Ship[{i+1}, {j+1}] to Buffer[{buffer_row+1}, {buffer_col+1}]'
-                frontier.append(currNode)
-                # don't iterate rest of column when found container to apply operators
-                break
-
-    return frontier
 
 def find_slot_in_col(self, col):
     for row in range(len(self.ship_grid)):
@@ -1037,13 +1044,13 @@ def unload_astar(ship_grid, buffer, unload_lst):
 
     initial_node = Node()
     initial_node.ship_grid = ship_grid.copy()
-    initial_node.buffer = buffer.copy()
+    initial_node.buffer = buffer.grid.copy()
     currNode = None 
     queue = [initial_node]
     expandedNodes = []
     while len(queue) > 0:
         currNode = queue[0]
-        if currNode.unload_goal(currNode.ship_grid, unload_lst) == True:
+        if unload_goal(currNode.ship_grid, unload_lst) == True:
 
             # operations [msg, cost] from currNode parent
             while currNode.parent is not None:
@@ -1111,14 +1118,6 @@ def find_ship_slot(ship_grid):
             
     # shouldn't return None but just in case for debugging
     return None
-
-# return sequence of operations saved in a list
-def balance_astar(ship_grid, buffer):
-    operations = []
-    
-    # if frontier is empty, SIFT
-
-    return operations
 
 def balance_goal(ship_grid):
     left_weight, right_weight, weight_balanced = calculate_balance(ship_grid)
